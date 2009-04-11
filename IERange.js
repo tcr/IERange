@@ -337,7 +337,7 @@ DOMRange.prototype.cloneContents = function () {
 	}
 
 	// clone contents
-	return (new RangeIterator(clonePartialText, clonePartialElement)).iterate(domRange);
+	return (new RangeIterator(clonePartialText, clonePartialElement)).iterate(this);
 }
 DOMRange.prototype.deleteContents = function () {
 	// extract contents and return nothing
@@ -361,7 +361,7 @@ DOMRange.prototype.extractContents = function () {
 	var anchor = DOMUtils.isDataNode(this.endContainer) || this.endOffset >= this.endContainer.childNodes.length ?
 	    this.endContainer : this.endContainer.childNodes[this.endOffset];
 	// extract contents
-	var content = (new RangeIterator(extractPartialText, extractPartialElement)).iterate(domRange);
+	var content = (new RangeIterator(extractPartialText, extractPartialElement)).iterate(this);
 	// set anchors
 	this.selectNode(anchor);
 	this.collapse(true);

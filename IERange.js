@@ -4,153 +4,111 @@
 // http://dylanschiemann.com/articles/dom2Range/dom2RangeExamples.html
 // http://www.w3.org/TR/DOM-Level-2-Traversal-Range/ranges.html
 
-//[TODO] better error reporting
+//[TODO] better exception support
 
-function findChildPosition(node) {
-	for (var i = 0; node = node.previousSibling; i++);
-	return i;
-}
+(function () {	// sandbox
 
-function findPreviousSibling(refNode) {
-	for (; !refNode.previousSibling && refNode.parentNode; refNode = refNode.parentNode);
-	return refNode.previousSibling || refNode;
-}
+/*
+  DOM functions
+ */
 
-function findNextSibling(refNode) {
-	for (; !refNode.nextSibling && refNode.parentNode; refNode = refNode.parentNode);
-	return refNode.nextSibling || refNode;
-}
-
-//[TODO] eliminate use of this
-function anchorWithTempNode(range, callback, bStart) {
-	// insert anchor at beginning of range
-	var newrange = range.duplicate();
-	newrange.collapse(bStart);
-	newrange.pasteHTML('<a id="_IERANGE_OFFSET"></a>');
-	var temp = document.getElementById('_IERANGE_OFFSET');
-
-	// call callback
-	callback(temp);
-
-	// merge split text nodes
-//[TODO] does this have to happen after removal to preserve selection?
-	if (temp.nextSibling && temp.nextSibling.nodeType == 3)
-	{
-		container.appendData(temp.nextSibling.nodeValue);
-		temp.parentNode.removeChild(temp.nextSibling);
+var DOMUtils = {
+	findChildPosition: function (node) {
+		for (var i = 0; node = node.previousSibling; i++);
+		return i;
+	},
+	findAdjacentSibling: function (refNode, bPrev) {
+		var dir = bPrev ? 'previousSibling' : 'nextSibling';
+		for (; !refNode[dir] && refNode.parentNode; refNode = refNode.parentNode);
+		return refNode[dir] || refNode;
+	},
+	isDataNode: function (node) {
+		return node && node.nodeValue != null && node.data != null;
+	},
+	isAncestorOf: function (parent, node) {
+		return !DOMUtils.isDataNode(parent) &&
+		    (parent.contains(DOMUtils.isDataNode(node) ? node.parentNode : node) ||
+		    node.parentNode == parent);
+	},
+	getNodeLength: function (node) {
+		return DOMUtils.isDataNode(node) ? node.nodeValue.length : node.childNodes.length;
+	},
+	splitDataNode: function (node, offset) {
+		if (!isDataNode(node))
+			return false;
+		var newNode = node.parentNode.insertBefore(node.cloneNode(true), node.nextSibling);
+		node.deleteData(0, offset);
+		newNode.deleteData(offset, newNode.length);
+	},
+	mergeDataNodes: function (nodeA, nodeB) {
+		if (!DOMUtils.isDataNode(nodeA) || !DOMUtils.isDataNode(nodeB) || nodeA.nodeType != nodeB.nodeType)
+			return false;
+		nodeA.appendData(nodeB.data);
+		nodeB.parentNode.removeChild(nodeB);
 	}
+};
 
-	// remove anchor
-	temp.parentNode.removeChild(temp);
-}
+/*
+  Text Range utilities
+  functions to simplify text range manipulation in ie
+ */
 
-// class to simplify text range manipulation in ie
-//[TODO] should this just be a set of utils?
+var TextRangeUtils = {
+	getOffset: function (range, bStart) {
+		return Math.abs(range.duplicate()[bStart ? 'moveStart' : 'moveEnd']('character', -1000000));		
+	},
+	setOffset: function (range, bStart, offset) {
+		range[bStart ? 'moveStart' : 'moveEnd']('character', offset - TextRangeUtils.getOffset(range, bStart));
+	},
+	findAnchor: function (range, bStart) {
+		// get current selection
+//		var selection = document.selection.createRange();
+		// insert anchor at beginning of range
+		var newrange = range.duplicate();
+		newrange.collapse(bStart);
+		newrange.pasteHTML('<a id="_IERANGE_OFFSET"></a>');
+		var temp = document.getElementById('_IERANGE_OFFSET');
 
-function TextRangeProxy(range)
-{
-	this.getOffset(bStart) {
-		return Math.abs(range.duplicate()[bStart ? 'moveStart' : 'moveEnd']('character', -1000000) );
-	}
-	
-	this.setOffset(bStart, offset) {
-		range[bStart ? 'moveStart' : 'moveEnd']('character', offset - this.getOffset(bStart));
-	}
-	
-	this.findAnchor(bStart) {
-		// returns
-		var container, offset = 0;
-		// find anchor using temp node
-		anchorWithTempNode(range, function (temp) {
-			if (temp.previousSibling)
-			{
-				// anchor is previous sibling
-//[TODO] isn't anchor next sibling?
-				container = temp.previousSibling;
-				// get text node offset
-				if (container.nodeType == 3)
-					offset = container.nodeValue.length;
-			}
-			else
-			{
-				// anchor is container node
-				container = temp.parentNode.parentNode;
-				offset = findChildPosition(temp.parentNode);
-			}
-		}, bStart);
+		// get container node
+		var container = temp.parentNode, offset = DOMUtils.findChildPosition(temp);
+		// merge split text nodes
+//		DOMUtils.mergeDataNodes(temp.previousSibling, temp.nextSibling);
+
+		// cleanup and return data
+		temp.parentNode.removeChild(temp);
+//		selection.select();
 		return {container: container, offset: offset};
-	}
-	
-	this.moveToAnchor(container, offset, bStart) {
+	},
+	moveToAnchor: function (range, container, offset, bStart) {
 		// parameters are based on anchor type (value vs. content)
 		var anchorRef = container, tOffset = 0;
 		// Text Node, Character Data (not Comment or Processing Instruction) data
-		if (container.nodeType == 3 || container.nodeType == 4)	
+		if (container.nodeType == 3 || container.nodeType == 4)
 			tOffset = offset;
 		// Element, Attribute, Entity Reference, Document, Document Fragment, &c. children
-		else if (!container.nodeValue && offset < container.childNodes.length)
+		else if (!DOMUtils.isDataNode(container) && offset < container.childNodes.length)
 			anchorRef = container.childNodes[offset];
 
 		// create a dummy node to position range (since we can't select text nodes)
 		var temp = document.createElement('a');
 		anchorRef.parentNode.insertBefore(temp, anchorRef);
-		var range = document.body.createTextRange();
-		range.moveToElementText(anchor);
-//[TODO] does this order screw up things?
+		var tempRange = document.body.createTextRange();
+		tempRange.moveToElementText(temp);
 		temp.parentNode.removeChild(temp);
 		// get text offset and remove dummy
-		tOffset += getTextOffset(range, true);
-		this.setOffset(tOffset, bStart);
+		tOffset += TextRangeUtils.getOffset(tempRange, bStart);
+		TextRangeUtils.setOffset(range, bStart, tOffset);
 	}
-	
-	// copied methods
-	this.getCommonAncestorContainer = range.parentElement;
-//[TODO] save start position on setHTML
-	this.setHTML = function (html) {
-//		var start = this.getOffset(true);
-		range.pasteHTML(html);
-//		this.setOffset(true, start);
-	}
-	this.getHTML = function () { return range.htmlText; }
-	this.getText = function () { return range.text; }
-	this.collapse = range.collapse;
-	this.duplicate = range.duplicate;
-	this.select = range.select;
-	this.getNative = function () { return range; }
-}
+};
 
-function DOMSelection() {
-//[TODO] support multiple ranges
-	var textRange = document.selection.createRange();
+/*
+  DOM Range
+ */
 
-	this.rangeCount = 1;
-
-	this.addRange = function (range) {
-		range.getTextRange().select();
-	}
-
-	this.removeRange = function (range) {
-	}
-
-	this.removeAllRanges = function () {
-	}
-
-	this.getRangeAt = function (index) {
-		return new DOMRange(textRange);
-	}
-
-	this.toString = function () {
-		return textRange.text;
-	}
-}
-
-function DOMRange(range) {
-//[TODO] take document parameter?
+window.DOMRange = function (document) {
 	// closure
-	var editable = this;
+	var domRange = this;
 
-	// private properties
-	var textRange = null;
 	// properties
 	this.startContainer = null;
 	this.startOffset = 0;
@@ -160,19 +118,27 @@ function DOMRange(range) {
 	this.collapsed = false;
 
 	function refreshProperties() {
-		editable.collapsed = (editable.startContainer == editable.endContainer && editable.startOffset == editable.endOffset);
-		editable.commonAncestorContainer = textRange.getCommonAncestorContainer();
+		// collapsed attribute
+		domRange.collapsed = (domRange.startContainer == domRange.endContainer && domRange.startOffset == domRange.endOffset);
+		// find common ancestor
+		var node = domRange.startContainer;
+		while (node && node != domRange.endContainer && !DOMUtils.isAncestorOf(node, domRange.endContainer))
+			node = node.parentNode;
+		domRange.commonAncestorContainer = node;
+		
+		// trigger listeners
+		for (var i = 0; i < listeners.length; i++)
+			listeners[i][this];
 	}
 
 	// load text range
-	function load(range) {
-		textRange = new TextRangeProxy(range);
-		var start = textRange.findAnchor(true);
-		editable.startContainer = start.container;
-		editable.startOffset = start.offset;
-		var end = textRange.findAnchor(false);
-		editable.endContainer = end.container;
-		editable.endOffset = end.offset;
+	function load(textRange) {
+		var start = TextRangeUtils.findAnchor(textRange, true);
+		domRange.startContainer = start.container;
+		domRange.startOffset = start.offset;
+		var end = TextRangeUtils.findAnchor(textRange, false);
+		domRange.endContainer = end.container;
+		domRange.endOffset = end.offset;
 		refreshProperties();
 	}
 	
@@ -182,38 +148,32 @@ function DOMRange(range) {
 		this.startContainer = container;
 		this.startOffset = offset;
 		refreshProperties();
-		
-		// update internal text range
-		textRange.moveToAnchor(container, offset, true);
 	}
 
 	this.setEnd = function(container, offset) {
 		this.endContainer = container;
 		this.endOffset = offset;
 		refreshProperties();
-
-		// update internal text range
-		textRange.moveToAnchor(container, offset, false);
 	}
 
 	this.setStartBefore = function (refNode) {
 		// set start to beore this node
-		this.setStart(refNode.parentNode, findChildPosition(refNode));
+		this.setStart(refNode.parentNode, DOMUtils.findChildPosition(refNode));
 	}
 
 	this.setStartAfter = function (refNode) {
 		// select next sibling
-		this.setStartBefore(findNextSibling(refNode));
+		this.setStart(refNode.parentNode, DOMUtils.findChildPosition(refNode) + 1);
 	}
 
 	this.setEndBefore = function (refNode) {
 		// set end to beore this node
-		this.setEnd(refNode.parentNode, findChildPosition(refNode));
+		this.setEnd(refNode.parentNode, DOMUtils.findChildPosition(refNode));
 	}
 
 	this.setEndAfter = function (refNode) {
 		// select next sibling
-		this.setEndBefore(findNextSibling(refNode));
+		this.setEnd(refNode.parentNode, DOMUtils.findChildPosition(refNode) + 1);
 	}
 
 	this.selectNode = function (refNode) {
@@ -223,7 +183,7 @@ function DOMRange(range) {
 
 	this.selectNodeContents = function (refNode) {
 		this.setStart(refNode, 0);
-		this.setEnd(refNode, refNode.nodeValue == null ? refNode.nodeValue.length - 1 : refNode.childNodes.length - 1);
+		this.setEnd(refNode, DOMUtils.getNodeLength(redNode));
 	}
 
 	this.collapse = function (toStart) {
@@ -234,39 +194,6 @@ function DOMRange(range) {
 	}
 
 	// editing methods
-//[TODO] the specs should really be followed on these (i.e. cloning vs. innerHTML)
-
-	function iterateRange(partialText, partialElement) {
-		// partial range iteration
-		function iteratePartialRange(node, offset, bStart, partial) {
-			var length = node.nodeValue ? node.length : node.childNodes.length;
-			var offset = bStart ? offset < length ? offset: length - 1 : 0;
-			var newNode = (node.nodeValue ? partialText : partialElement).call(this, node, length, offset);
-			if (partial)
-				newNode.insertBefore(partial, bStart ? newNode.firstChild : null);
-			return node.parentNode == this.commonAncestorContainer ? newNode :
-				iteratePartialRange(node.parentNode, findChildPosition(node) + bStart, bStart, newNode);
-		}
-
-		// handle case where common ancestor is anchor
-		if (this.startContainer == this.commonAncestorContainer)
-			return (this.startContainer.nodeValue ? partialText : partialElement)
-			    .call(this, this.startContainer, this.startOffset, this.endOffset - this.startOffset);
-
-		// find anchors
-		for (var startAnchor = this.startContainer; startAnchor.parentNode != this.commonAncestorContainer; )
-			startAnchor = startAnchor.parentNode;
-		for (var endAnchor = this.endContainer; endAnchor.parentNode != this.commonAncestorContainer; )
-			endAnchor = endAnchor.parentNode;
-		// clone container
-		var offset = findChildPosition(startAnchor) + 1, length = findChildPosition(endAnchor) - offset;
-		var container = partialElement(this.commonAncestorContainer, offset, length);
-
-		// append partials
-		container.insertBefore(iteratePartialRange(this.startContainer, this.startOffset, true), container.firstChild);
-		container.appendChild(iteratePartialRange(this.endContainer, this.endOffset, false));
-		return container;
-	}
 
 	this.cloneContents = function () {
 		// cloning methods
@@ -276,15 +203,12 @@ function DOMRange(range) {
 		function clonePartialElement(node, offset, length) {
 			var newNode = node.cloneNode(false);
 			for (var child = node.childNodes[offset]; child && length--; child = child.nextSibling)
-				newNode.appendChild(cloneSelectedNode(child));
+				newNode.appendChild(child.cloneNode(true));
 			return newNode;
-		}
-		function cloneSelectedNode(node) {
-			return node.cloneNode(true);
 		}
 
 		// clone contents
-		return iterateRange(clonePartialText, clonePartialElement);
+		return (new RangeIterator(clonePartialText, clonePartialElement)).iterate(domRange);
 	}
 
 	this.deleteContents = function () {
@@ -302,18 +226,15 @@ function DOMRange(range) {
 		function extractPartialElement(node, offset, length) {
 			var newNode = node.cloneNode(false);
 			while (node.childNodes[offset] && length--)
-				newNode.appendChild(extractSelectedNode(node.childNodes[offset]));
+				newNode.appendChild(node.removeChild(node.childNodes[offset]));
 			return newNode;
-		}
-		function extractSelectedNode(node) {
-			return node.parentNode.removeChild(node);
 		}
 
 		// get new anchors
-		var anchor = this.endContainer.nodeValue ? this.endContainer :
-		    this.endContainer.childNodes[this.endOffset];
+		var anchor = DOMUtils.isDataNode(this.endContainer) || this.endOffset >= this.endContainer.childNodes.length ?
+		    this.endContainer : this.endContainer.childNodes[this.endOffset];
 		// extract contents
-		var content = iterateRange(extractPartialText, extractPartialElement);
+		var content = (new RangeIterator(extractPartialText, extractPartialElement)).iterate(domRange);
 		// set anchors
 		this.selectNode(anchor);
 		this.collapse(true);
@@ -323,15 +244,11 @@ function DOMRange(range) {
 
 	this.insertNode = function (newNode) {
 		// set original anchor and insert node
-		if (newNode.nodeValue) {
-			this.startContainer.parentNode.insertBefore(document.createTextNode(newNode.substringData(this.startOffset)), this.startContainer.nextSibling);
+		if (DOMUtils.isDataNode(this.startContainer)) {
+			DOMUtils.splitDataNode(this.startContainer, this.startOffset);
 			this.startContainer.parentNode.insertBefore(newNode, this.startContainer.nextSibling);
-			this.startContainer.deleteData(0, this.startOffset);
 		} else {
-			if (this.startOffset < this.startContainer.childNodes.length)
-				this.startContainer.parentNode.insertBefore(newNode, this.startContainer);
-			else
-				this.startContainer.insertBefore(newNode, this.startContainer.childNodes[this.startOffset]);
+			this.startContainer.insertBefore(newNode, this.startContainer.childNodes[this.startOffset]);
 		}
 		// resync start anchor
 		this.setStart(this.startContainer, this.startOffset);
@@ -367,22 +284,37 @@ function DOMRange(range) {
 	}
 
 	this.createContextualFragment = function (tagString) {
+		// parse the tag string in a context node
+		var content = (DOMUtils.isDataNode(this.startContainer) ? this.startContainer.parentNode : this.startContainer).cloneNode(false);
+		content.innerHTML = tagString;
 		// return a document fragment from the created node
-		var range = textRange.duplicate();
-		range.collapse(true);
-		range.setHTML(tagString);
-//[TODO] this may split text nodes...
-//[TODO] moveToStartPoint (setHTML resets range to end)
-		return (new DOMRange(range)).extractContents();
+		for (var fragment = document.createDocumentFragment(); content.firstChild; )
+			fragment.appendChild(content.firstChild);
+		return fragment;
 	}
 
 	this.getTextRange = function () {
-		// return IE text range
-		return textRange.getNative();
+		// return an IE text range
+		var textRange = document.body.createTextRange();
+		TextRangeUtils.moveToAnchor(textRange, this.startContainer, this.startOffset, true);
+		TextRangeUtils.moveToAnchor(textRange, this.endContainer, this.endOffset, false);
+		return textRange;
+	}
+	
+	// selection hooks
+	var listeners = [];
+	this.addListener = function (listener) {
+		listeners.push(listener);
+	}
+	this.removeListener = function (listener) {
+		for (var i = 0; i < listeners.length; i++) {
+			if (listeners[i] = listener)
+				listeners = listeners.splice(i, 1);
+		}
 	}
 
 	// constructor
-	load(range || document.body.createTextRange());
+	load(arguments.length > 1 ? arguments[1] : document.body.createTextRange());
 }
 
 DOMRange.START_TO_START = 0;
@@ -390,12 +322,160 @@ DOMRange.START_TO_END = 1;
 DOMRange.END_TO_END = 2;
 DOMRange.END_TO_START = 3;
 
-// document hooks
+/*
+  Range Iterator
+ */
+
+//[TODO] make this a real iterator class
+
+function RangeIterator(partialText, partialElement) {
+	this.iterate = function (domRange) {
+		// partial range iteration
+		function iteratePartialRange(node, offset, bStart, partial) {
+			var pOffset = bStart ? offset : 0;
+			var pLength = bStart ? DOMUtils.getNodeLength(node) - offset : offset;
+			var newNode = (DOMUtils.isDataNode(node) ? partialText : partialElement).call(domRange, node, pOffset, pLength);
+//[TODO] partial as argument to partialElement?			
+			if (partial)
+				newNode.insertBefore(partial, bStart ? newNode.firstChild : null);
+			return node.parentNode == domRange.commonAncestorContainer ? newNode :
+				iteratePartialRange(node.parentNode, DOMUtils.findChildPosition(node) + bStart, bStart, newNode);
+		}
+		
+		// handle case where common ancestor is anchor
+		if (domRange.startContainer == domRange.endContainer)
+			return (DOMUtils.isDataNode(domRange.startContainer) ? partialText : partialElement)
+			    .call(domRange, domRange.startContainer, domRange.startOffset, domRange.endOffset - domRange.startOffset);
+
+		// find root anchors
+		for (var startAnchor = domRange.startContainer; startAnchor.parentNode != domRange.commonAncestorContainer; )
+			startAnchor = startAnchor.parentNode;
+		for (var endAnchor = domRange.endContainer; endAnchor.parentNode != domRange.commonAncestorContainer; )
+			endAnchor = endAnchor.parentNode;
+		// clone container
+		var offset = DOMUtils.findChildPosition(startAnchor) + 1, length = DOMUtils.findChildPosition(endAnchor) - offset;
+		var container = partialElement(domRange.commonAncestorContainer, offset, length);
+		// append partials
+		container.insertBefore(iteratePartialRange(domRange.startContainer, domRange.startOffset, true), container.firstChild);
+		container.appendChild(iteratePartialRange(domRange.endContainer, domRange.endOffset, false));
+		// convert to document fragment
+		for (var nodes = document.createDocumentFragment(); container.firstChild; )
+			nodes.appendChild(container.firstChild);
+		return nodes;
+	}
+}
+
+/*
+  DOM Selection
+ */
+
+
+window.DOMSelection = function () {
+	var ranges = [];
+	var domSelection = this;
+	this.rangeCount = 0;
+	
+	var selectionEnabled = true;
+	
+	// update range objects when selection is changed
+	function selectionHandler() {
+		// check if we can update selection
+		if (!selectionEnabled)
+			return;
+		selectionEnabled = false;
+
+		// get new anchor points
+		selection = document.selection.createRange();
+		var start = TextRangeUtils.findAnchor(selection, true);
+		var end = TextRangeUtils.findAnchor(selection, false);
+
+		// update ranges
+		selectionEnabled = false;
+		for (var i = 0; i < ranges.length; i++) {
+			ranges[i].setStart(start.container, start.offset);
+			ranges[i].setEnd(end.container, end.offset);
+		}
+		// create range if none exists
+		if (!ranges.length)
+			domSelection.addRange(new DOMRange(selection));
+			
+		// enable selection
+		selectionEnabled = true;
+	}	
+	// add DOM selection handler
+	document.attachEvent('onselectionchange', selectionHandler);
+	
+	// update on-screen selection when ranges are changed
+	function updateSelection() {
+		// check if we can update selection
+		if (!selectionEnabled)
+			return;
+		selectionEnabled = false;
+			
+		// iterate ranges
+		for (var start = [], end = [], i = 0; i < ranges.length; i++) {
+			var range = ranges[i].getTextRange();
+			start.push(TextRangeUtils.getOffset(range, true));
+			end.push(TextRangeUtils.getOffset(range, false));
+		}
+
+		// select new range
+		var range = document.body.createTextRange();
+		TextRangeUtils.setOffset(range, true, Math.min.apply(null, start));
+		TextRangeUtils.setOffset(range, false, Math.max.apply(null, end));
+		range.select();
+		
+		// enable selection
+		selectionEnabled = true;
+	}
+
+	this.addRange = function (range) {
+		ranges.push(range);
+		this.rangeCount = ranges.length;
+		range.addListener(updateSelection);
+		updateSelection();
+	}
+
+	this.removeRange = function (range) {
+		for (var i = 0; i < ranges.length; i++) {
+			if (ranges[i] == range) {
+				ranges = ranges.splice(i, 1);
+				range.removeListener(updateSelection);
+			}
+		}
+	}
+
+	this.removeAllRanges = function () {
+		while (ranges.length)
+			this.removeRange(ranges[0]);
+	}
+
+	this.getRangeAt = function (index) {
+		return ranges[index];
+	}
+
+	this.toString = function () {
+		return document.selection.createRange().text;
+	}
+	
+	// add initial range
+	var range = document.selection.createRange();
+	if (TextRangeUtils.getOffset(range, true) != 0 && TextRangeUtils.getOffset(range, false) != 0)
+		this.addRange(new DOMRange(range));
+}
+
+/*
+  scripting hooks
+ */
 
 document.createRange = function () {
-	return new DOMRange();
+	return new DOMRange(document);
 }
 
 window.getSelection = function () {
-	return new DOMSelection();
+	var selection = new DOMSelection();
+	window.getSelection = function () { return selection; }
+	return selection;
 }
+
+})();

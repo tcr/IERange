@@ -65,29 +65,12 @@ function SubtreeIterator() {
 
 SubtreeIterator.prototype = {
 	init: function (node, offset, length) {
-		if (isDataNode(node)) {
-			// data nodes iterated as one node fragment
-			var node = document.createTextNode(node.substringData(offset, length));
-			this.length = 1;
-			this.offset = 0;
-			this.index = -1;
-			this.next = function () { return ++this.index < this.length ? node : null; }
-			this.current = function () { return this.index == 0 ? node : null; }
-			this.remove = function () {
-				if (!this.hasNext())
-					node.deleteData(offset, length);
-				this.init(document.createDocumentFragment());
-			}
-		}
-
-		// element nodes
 		this.node = node;
 		this.offset = offset == null ? offset : 0;
 		this.length = length == null ? length : DOMUtils.getNodeLength(node) - offset;
 		this.index = -1;
 	}
 	next: function () { return this.index < this.length ? this.node.childNodes[this.offset + ++this.index] : null; },
-	current: function () { return this.node.childNodes[this.offset + this.index]; },
 	hasNext: function () { return this.index == this.length; },
 	remove: function () {
 		this.length--;
@@ -103,7 +86,18 @@ function RangeSubtreeIterator() {
 
 RangeSubtreeIterator.prototype = augmentObject(new SubtreeIterator(), {
 	init: function (range) {
-		this.range = range;
+		// get range data
+		this.range = range.duplicate();
+		// simply text node iteration by splitting them
+//[TODO] allow this to be undone?
+		if (isDataNode(range.startContainer))
+			range.startContainer.splitText(range.startOffset);
+			range.setStartBefore(range.startContainer.nextSibling);
+		}
+		if (isDataNode(range.endContainer))
+			range.endContainer.splitText(range.endOffset);
+			range.setEndBefore(range.endContainer.nextSibling);
+		}
 
 		// create new iterator
 		var ancestor = range.commonAncestorContainer;
@@ -113,16 +107,16 @@ RangeSubtreeIterator.prototype = augmentObject(new SubtreeIterator(), {
 	},
 	hasPartialSubtree: function () {
 		// check if this node be partially selected
-		var currentNode = this.current();
+		var currentNode = this.node.childNodes[this.offset + this.index];
 		return isAncestorOf(this.range.startContainer, currentNode) ||
 		    isAncestorOf(this.range.endConainer, currentNode);
 	},
 	getRangeSubtreeIterator: function () {
 		// create a new range
-		var subRange = new DOMRange(document), currentNode = this.current();
+		var subRange = new DOMRange(document), currentNode = this.node.childNodes[this.offset + this.index];
 		subRange.selectNodeContents(currentNode);
 		// find anchor points
-		if (isAncestorOf(this.range.startContainer, current))
+		if (isAncestorOf(this.range.startContainer, currentNode))
 			subRange.setStart(currentNode, DOMUtils.findClosestAncestor(currentNode, this.range.startContainer));
 		if (isAncestorOf(this.range.endContainer, currentNode))
 			subRange.setEnd(currentNode, DOMUtils.findClosestAncestor(currentNode, this.range.endContainer));

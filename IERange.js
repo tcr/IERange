@@ -9,6 +9,7 @@
 // http://stackoverflow.com/questions/164147/character-offset-in-an-internet-explorer-textrange
 // http://msdn.microsoft.com/en-us/library/ms535872.aspx#
 // http://jorgenhorstink.nl/test/javascript/range/range.js
+// http://jorgenhorstink.nl/2006/07/05/dom-range-implementation-in-ecmascript-completed/
 // http://dylanschiemann.com/articles/dom2Range/dom2RangeExamples.html
 // http://www.w3.org/TR/DOM-Level-2-Traversal-Range/ranges.html
 
@@ -42,12 +43,6 @@ var DOMUtils = {
 		var newNode = node.parentNode.insertBefore(node.cloneNode(true), node.nextSibling);
 		node.deleteData(0, offset);
 		newNode.deleteData(offset, newNode.length);
-	},
-	mergeDataNodes: function (nodeA, nodeB) {
-		if (!DOMUtils.isDataNode(nodeA) || !DOMUtils.isDataNode(nodeB) || nodeA.nodeType != nodeB.nodeType)
-			return false;
-		nodeA.appendData(nodeB.data);
-		nodeB.parentNode.removeChild(nodeB);
 	}
 };
 
@@ -66,9 +61,9 @@ var TextRangeUtils = {
 	findAnchor: function (range, bStart) {
 //[TODO] find a way to avoid splitting text nodes while preserving selection
 		// insert anchor at beginning of range
-		var newrange = range.duplicate();
-		newrange.collapse(bStart);
-		newrange.pasteHTML('<a id="_IERANGE_OFFSET"></a>');
+		var cursor = range.duplicate();
+		cursor.collapse(bStart);
+		cursor.pasteHTML('<a id="_IERANGE_OFFSET"></a>');
 		var temp = document.getElementById('_IERANGE_OFFSET');
 
 		// get container node
@@ -79,17 +74,24 @@ var TextRangeUtils = {
 	},
 	moveToAnchor: function (range, container, offset, bStart) {
 		// parameters are based on anchor type (value vs. content)
-		var anchorRef = container, tOffset = 0;
+		var anchorContainer, anchorNode, tOffset = 0;
 		// Text Node, Character Data (not Comment or Processing Instruction) data
 		if (container.nodeType == 3 || container.nodeType == 4)
+		{
+			anchorContainer = container.parentNode;
+			anchorNode = container;
 			tOffset = offset;
+		}
 		// Element, Attribute, Entity Reference, Document, Document Fragment, &c. children
-		else if (!DOMUtils.isDataNode(container) && offset < container.childNodes.length)
-			anchorRef = container.childNodes[offset];
+		else if (!DOMUtils.isDataNode(container))
+		{
+			anchorContainer = container;
+			anchorNode = container.childNodes[offset];
+		}
 
 		// create a dummy node to position range (since we can't select text nodes)
 		var temp = document.createElement('a');
-		anchorRef.parentNode.insertBefore(temp, anchorRef);
+		anchorContainer.insertBefore(temp, anchorNode);
 		var tempRange = document.body.createTextRange();
 		tempRange.moveToElementText(temp);
 		temp.parentNode.removeChild(temp);
@@ -105,7 +107,10 @@ var TextRangeUtils = {
  
 function DOMRange(document, range) {
 //[TODO] actually save document parameter
-	this.loadTextRange(range || document.body.createTextRange());
+	this.startContainer = this.endContainer = document.body;
+	this.endOffset = DOMUtils.getNodeLength(document.body);
+	if (range)
+		this.loadTextRange(range);
 }
 DOMRange.START_TO_START = 0;
 DOMRange.START_TO_END = 1;
@@ -130,10 +135,6 @@ DOMRange.prototype = {
 		while (node && node != this.endContainer && !DOMUtils.isAncestorOf(node, this.endContainer))
 			node = node.parentNode;
 		this.commonAncestorContainer = node;
-		
-		// trigger listeners
-		for (var i = 0; i < this._listeners.length; i++)
-			this._listeners[i][this];
 	},
 	
 	// range methods
@@ -234,9 +235,14 @@ DOMRange.prototype = {
 		        : 1;
 	},
 	cloneRange: function () {
-		var range = new DOMRange();
-		range.setStart(this.startcontainer, this.startOffset);
-		range.setEnd(this.endContainer, this.endOffset);
+		// return cloned range (directly copying properties for speed)
+		var range = new DOMRange(document);
+		range.startContainer = this.startContainer;
+		range.startOffset = this.startOffset;
+		range.endContainer = this.endContainer;
+		range.endOffset = this.endOffset;
+		range.commonAncestorContainer = this.commonAncestorContainer;
+		range.collapsed = this.collapsed;
 		return range;
 	},
 	detach: function () {
@@ -271,18 +277,6 @@ DOMRange.prototype = {
 		this.endContainer = end.container;
 		this.endOffset = end.offset;
 		this._refreshProperties();
-	},
-	
-	// changelisteners
-	_listeners: [],
-	addListener: function (listener) {
-		this._listeners.push(listener);
-	},
-	removeListener: function (listener) {
-		for (var i = 0; i < this._listeners.length; i++) {
-			if (this._listeners[i] = listener)
-				listeners = this._listeners.splice(i, 1);
-		}
 	}
 }
 
@@ -384,10 +378,8 @@ function DOMSelection(document) {
 	// add DOM selection handler
 	var selection = this;
 	document.attachEvent('onselectionchange', function () { selection._selectionChangeHandler(); });
-	// add initial range
-	var range = document.selection.createRange();
-	if (TextRangeUtils.getOffset(range, true) != 0 && TextRangeUtils.getOffset(range, false) != 0)
-		this.addRange(new DOMRange(range));
+	// initialize ranges
+	this._selectionChangeHandler();
 }
 
 DOMSelection.prototype = {
@@ -403,31 +395,26 @@ DOMSelection.prototype = {
 		if (!this._canChangeSelection)
 			return;
 		this._canChangeSelection = false;
-
-		// get new anchor points
-		selection = document.selection.createRange();
-		var start = TextRangeUtils.findAnchor(selection, true);
-		var end = TextRangeUtils.findAnchor(selection, false);
-
-		// update ranges
-		selectionEnabled = false;
-		for (var i = 0; i < this._ranges.length; i++) {
-			this._ranges[i].setStart(start.container, start.offset);
-			this._ranges[i].setEnd(end.container, end.offset);
-		}
-		// create range if none exists
-		if (!this._ranges.length)
-			this.addRange(new DOMRange(selection));
-			
+		
+		// clear ranges list
+		this.removeAllRanges();		
+		// add any existing selection
+		var textRange = document.selection.createRange();
+		if (TextRangeUtils.getOffset(textRange, true) != 0 ||
+		    TextRangeUtils.getOffset(textRange, false) != 0)
+			this.addRange(new DOMRange(document, textRange));
+		
 		// enable selection
 		this._canChangeSelection = true;
 	},
-	_rangeChangeHandler: function () {
+	_refreshSelection: function () {
 		// check if we can update selection
 		if (!this._canChangeSelection)
 			return;
 		this._canChangeSelection = false;
-			
+		
+		// update range count
+		this.rangeCount = this._ranges.length;
 		// iterate ranges
 		for (var start = [], end = [], i = 0; i < this._ranges.length; i++) {
 			var range = this._ranges[i].getTextRange();
@@ -437,8 +424,8 @@ DOMSelection.prototype = {
 
 		// select new range
 		var range = document.body.createTextRange();
-		TextRangeUtils.setOffset(range, true, Math.min.apply(null, start));
-		TextRangeUtils.setOffset(range, false, Math.max.apply(null, end));
+		TextRangeUtils.setOffset(range, true, Math.min.apply(null, start) || 0);
+		TextRangeUtils.setOffset(range, false, Math.max.apply(null, end) || 0);
 		range.select();
 		
 		// enable selection
@@ -448,28 +435,28 @@ DOMSelection.prototype = {
 	// public methods
 	addRange: function (range) {
 		// add range and update selection
-		this._ranges.push(range);
-		this.rangeCount = this._ranges.length;
-		range.addListener(this._rangeChangeHandler);
-		this._rangeChangeHandler();
+		this._ranges.push(range.cloneRange());
+		this._refreshSelection();
 	},
 	removeRange: function (range) {
 		// remove the range from selection
 		for (var i = 0; i < this._ranges.length; i++) {
-			if (this._ranges[i] == range) {
+			if (this._ranges[i].startContainer == range.startContainer && 
+			    this._ranges[i].startOffset == range.startOffset && 
+			    this._ranges[i].endContainer == range.endContainer && 
+			    this._ranges[i].endOffset == range.endOffset)
 				this._ranges.splice(i, 1);
-				range.removeListener(this._rangeChangeHandler);
-			}
 		}
 	},
 	removeAllRanges: function () {
 		// remove all ranges
 		while (this._ranges.length)
 			this.removeRange(this._ranges[0]);
+		this._refreshSelection();
 	},
 	getRangeAt: function (index) {
 		// get specified range
-		return this._ranges[index];
+		return this._ranges[index].cloneRange();
 	},
 	toString: function () {
 		// get selection text

@@ -1,83 +1,132 @@
-function findClosestAncestor(root, node) {
-	if (!isAncestorOf(root, node))
+var DOMUtils = {
+	findClosestAncestor: function (root, node) {
+		if (!isAncestorOf(root, node))
+			return node;
+		while (node && node.parentNode != root)
+			node = node.parentNode;
 		return node;
-	while (node && node.parentNode != root)
-		node = node.parentNode;
-	return node;
+	}
 }
 
-function cloneRange(range) {
-	return (function cloneSubtree(iterator) {
-		for (var node, frag = document.createDocumentFragment(); iterator.next(); ) {
-			node = iterator.current().cloneNode(!iterator.hasPartialSubtree());
-			if (node.hasPartialSubtree())
-				node.appendChild(cloneSubtree(iterator.getSubtreeIterator()));
-			frag.appendChild(frag);
-		}
-		return frag;
-	})(new RangeSubtreeIterator(range));
+function augmentObject(obj, props) {
+	for (var i in props)
+		obj[i] = props[i];
+	return obj;
+}
+
+{
+	this.cloneContents = function () {
+		// clone a subtree
+		return (function cloneSubtree(iterator) {
+			for (var node, frag = document.createDocumentFragment(); node = iterator.next(); ) {
+				node = node.cloneNode(!iterator.hasPartialSubtree());
+				if (node.hasPartialSubtree())
+					node.appendChild(cloneSubtree(iterator.getSubtreeIterator()));
+				frag.appendChild(node);
+			}
+			return frag;
+		})(new RangeSubtreeIterator(this));
+	}
+
+	this.extractContents = function () {
+		// move anchor
+		this.setStartBefore(DOMUtils.findClosestAncestor(this.commonAncestorContainer, this.endContainer));
+		this.collapse(true);
+		// extract a range
+		return (function extractSubtree(iterator) {
+			for (var node, frag = document.createDocumentFragment(); node = iterator.next(); ) {
+				node = !iterator.hasPartialSubtree() ? iterator.remove() : node.cloneNode(false);
+				if (node.hasPartialSubtree())
+					node.appendChild(extractSubtree(iterator.getSubtreeIterator()));
+				frag.appendChild(node);
+			}
+			return frag;
+		})(new RangeSubtreeIterator(this));
+	}
+
+	this.deleteContents = function () {
+		// move anchor
+		this.setStartBefore(DOMUtils.findClosestAncestor(this.commonAncestorContainer, this.endContainer));
+		this.collapse(true);
+		// delete a range
+		(function deleteSubtree(iterator) {
+			for (var node; node = iterator.next(); )
+				!node.hasPartialSubtree() ?
+				    iterator.remove() :
+				    deleteSubtree(iterator.getSubtreeIterator());
+		})(new RangeSubtreeIterator(this));
+	}
 }
 
 function SubtreeIterator() {
-	var index = 0, node = null, offset = 0, length = 0;
+	if (arguments.length)
+		this.init.apply(this, arguments);
+}
 
-	this.next = function () { return index < offset + length ? node.childNodes[index++] : null; }
-	this.prev = function () { return index > offset ? node.childNodes[--index] : null; }
-	this.current = function () { return node.childNodes[index]; };
-	this.isDone = function () { return index == offset + length; }
-	this.getPosition = function () { return index; }
-	this.getSubtreeIterator = function (_offset, _length) { return new SubtreeIterator(this.current(), _offset, _length); }
+SubtreeIterator.prototype = {
+	init: function (node, offset, length) {
+		if (isDataNode(node)) {
+			// data nodes iterated as one node fragment
+			var node = document.createTextNode(node.substringData(offset, length));
+			this.length = 1;
+			this.offset = 0;
+			this.index = -1;
+			this.next = function () { return ++this.index < this.length ? node : null; }
+			this.current = function () { return this.index == 0 ? node : null; }
+			this.remove = function () {
+				if (!this.hasNext())
+					node.deleteData(offset, length);
+				this.init(document.createDocumentFragment());
+			}
+		}
 
-	(this.init = function (_node, _offset, _length) {
-		if (isDataNode(_node)) {
-			// special case for text nodes
-			node = document.createDocumentFragment();
-			node.appendChild(document.createTextNode(_node.substringData(_offset, _length)));
-		}
-		else
-		{
-			// element nodes
-			node = _node;
-			offset = _offset == null ? _offset : 0;
-			length = _length == null ? _length : DOMUtils.getNodeLength(node) - offset;
-			index = _offset;
-		}
-	}).apply(this, arguments);
+		// element nodes
+		this.node = node;
+		this.offset = offset == null ? offset : 0;
+		this.length = length == null ? length : DOMUtils.getNodeLength(node) - offset;
+		this.index = -1;
+	}
+	next: function () { return this.index < this.length ? this.node.childNodes[this.offset + ++this.index] : null; },
+	current: function () { return this.node.childNodes[this.offset + this.index]; },
+	hasNext: function () { return this.index == this.length; },
+	remove: function () {
+		this.length--;
+		return this.node.removeChild(this.node.childNodes[this.offset + this.index--]);
+	},
+	getSubtreeIterator: function (offset, length) { return new SubtreeIterator(this.current(), offset, length); }
 }
 
 function RangeSubtreeIterator() {
-	var range, iterator;
+	if (arguments.length)
+		this.init.apply(this, arguments);
+}
 
-	this.next = function () { return iterator.next(); }
-	this.current = function () { return iterator.current(); }
-	this.prev = function () { return iterator.prev(); }
-	this.isDone = function () { return iterator.isDone(); }
-	this.getPosition = function () { return iterator.getPosition(); }
+RangeSubtreeIterator.prototype = augmentObject(new SubtreeIterator(), {
+	init: function (range) {
+		this.range = range;
 
-	this.hasPartialSubtree = function () {
-		return isAncestorOf(range.startContainer, this.current()) ||
-		    isAncestorOf(range.endConainer, this.current());
-	}
-
-	this.getRangeSubtreeIterator = function () {
+		// create new iterator
+		var ancestor = range.commonAncestorContainer;
+		var offset = DOMUtils.findClosestAncestor(ancestor, range.startContainer);
+		var length = DOMUtils.findClosestAncestor(ancestor, range.endContainer); - offset;
+		this.iterator = new SubtreeIterator(ancestor, offset, length);
+	},
+	hasPartialSubtree: function () {
+		// check if this node be partially selected
+		var currentNode = this.current();
+		return isAncestorOf(this.range.startContainer, currentNode) ||
+		    isAncestorOf(this.range.endConainer, currentNode);
+	},
+	getRangeSubtreeIterator: function () {
 		// create a new range
-		var subRange = new DOMRange(document);
-		subRange.selectNodeContents(this.current()); 
+		var subRange = new DOMRange(document), currentNode = this.current();
+		subRange.selectNodeContents(currentNode);
 		// find anchor points
-		if (isAncestorOf(range.startContainer, this.current()))
-			subRange.setStart(this.current(), findClosestAncestor(this.current(), range.startContainer));
-		if (isAncestorOf(range.endContainer, this.current()))
-			subRange.setEnd(this.current(), findClosestAncestor(this.current(), range.endContainer));
+		if (isAncestorOf(this.range.startContainer, current))
+			subRange.setStart(currentNode, DOMUtils.findClosestAncestor(currentNode, this.range.startContainer));
+		if (isAncestorOf(this.range.endContainer, currentNode))
+			subRange.setEnd(currentNode, DOMUtils.findClosestAncestor(currentNode, this.range.endContainer));
 		// return iterator
 		return new RangeSubtreeIterator(subRange);
 	}
-
-	(this.init = function (_range) {
-		range = _range;
-
-		// create new iterator
-		var offset = findClosestAncestor(range.commonAncestorContainer, range.startContainer);
-		var length = findClosestAncestor(range.commonAncestorContainer, range.endContainer); - offset;
-		iterator = new SubtreeIterator(node, offset, length);
-	}).apply(this, arguments);
-}
+});

@@ -7,8 +7,7 @@
 //[TODO] better error reporting
 
 function findChildPosition(node) {
-	for (var i = 0; node.previousSibling; node = node.previousSibling)
-		i++;
+	for (var i = 0; node = node.previousSibling; i++);
 	return i;
 }
 
@@ -237,88 +236,105 @@ function DOMRange(range) {
 	// editing methods
 //[TODO] the specs should really be followed on these (i.e. cloning vs. innerHTML)
 
-	function iterateRange(cbSelected, cbPartialElement, cbPartialText) {
-		// want to find beginning and end partial
-		var beginPartial = this.startContainer.nodeValue ? this.startContainer : this.startContainer.childNodes[this.startOffset];
-		while (beginPartial.parentNode != this.commonAncestorContainer)
-			beginPartial = beginPartial.parentNode;
-		var endPartial = this.startContainer.nodeValue ? this.startContainer : this.startContainer.childNodes[this.startOffset];
-		while (endPartial.parentNode != this.commonAncestorContainer)
-			endPartial = endPartial.parentNode;
+	function iterateRange(partialText, partialElement) {
+		// partial range iteration
+		function iteratePartialRange(node, offset, bStart, partial) {
+			var length = node.nodeValue ? node.length : node.childNodes.length;
+			var offset = bStart ? offset < length ? offset: length - 1 : 0;
+			var newNode = (node.nodeValue ? partialText : partialElement).call(this, node, length, offset);
+			if (partial)
+				newNode.insertBefore(partial, bStart ? newNode.firstChild : null);
+			return node.parentNode == this.commonAncestorContainer ? newNode :
+				iteratePartialRange(node.parentNode, findChildPosition(node) + bStart, bStart, newNode);
+		}
 
-		// begin with partially selected nodes
-		var node, children = [];
-		if (this.startContainer.nodeValue) {
-			children.push(cbPartialText(this.startContainer, this.startOffset));
-			node = node.nextSibling;
-		} else {
-			node = this.startContainer.childNodes[this.startOffset];
-		}
-		for (node.parentNode != this.commonAncestorContainer; node = node.parentNode)
-			while 
-			children.push(cbSelected(node = node.nextSibling));
-			while (node.nextSibling && node.nextSibling != 
-		};
-		for (var node = this.startContainer.nodeValue ? this.startContainer : this.startContainer.childNodes[this.startOffset], children = [];
-		    node != this.commonAncestorContainer; node = node.parentNode) {
-			// current node
-			if (node.nodeValue) {
-				children.push(cbPartialText(this.startContainer, this.startOffset))
-				while (node.nextSibling)
-					children.push(cbSelected(node = node.nextSibling));
-			} else if (node == this.startContainer) {
-				
-			} else {
-			}
-			node == this.startContainer ?
-				node.nodeValue ?
-					parent.push(cbPartialText(this.startContainer, this.startOffset)) :
-				this.startOffset > 0 ? {
-					parent.push(cbPartialElement(node, children)
-			node == this.start
-				children.push(cbSelected(node));
-			// selected nodes
-			while (node.nextSibling)
-				children.push(cbSelected(node = node.nextSibling));
-		}
+		// handle case where common ancestor is anchor
+		if (this.startContainer == this.commonAncestorContainer)
+			return (this.startContainer.nodeValue ? partialText : partialElement)
+			    .call(this, this.startContainer, this.startOffset, this.endOffset - this.startOffset);
+
+		// find anchors
+		for (var startAnchor = this.startContainer; startAnchor.parentNode != this.commonAncestorContainer; )
+			startAnchor = startAnchor.parentNode;
+		for (var endAnchor = this.endContainer; endAnchor.parentNode != this.commonAncestorContainer; )
+			endAnchor = endAnchor.parentNode;
+		// clone container
+		var offset = findChildPosition(startAnchor) + 1, length = findChildPosition(endAnchor) - offset;
+		var container = partialElement(this.commonAncestorContainer, offset, length);
+
+		// append partials
+		container.insertBefore(iteratePartialRange(this.startContainer, this.startOffset, true), container.firstChild);
+		container.appendChild(iteratePartialRange(this.endContainer, this.endOffset, false));
+		return container;
 	}
 
 	this.cloneContents = function () {
-		// return a document fragment copying the range nodes
-		var content = document.createDocumentFragment();
-		var temp = document.createElement('a');
-		temp.innerHTML = textRange.getHTML();
-		while (temp.firstChild)
-			content.appendChild(temp.firstChild);
-		return content;
+		// cloning methods
+		function clonePartialText(node, offset, length) {
+			return document.createTextNode(node.substringData(offset, length));
+		}
+		function clonePartialElement(node, offset, length) {
+			var newNode = node.cloneNode(false);
+			for (var child = node.childNodes[offset]; child && length--; child = child.nextSibling)
+				newNode.appendChild(cloneSelectedNode(child));
+			return newNode;
+		}
+		function cloneSelectedNode(node) {
+			return node.cloneNode(true);
+		}
+
+		// clone contents
+		return iterateRange(clonePartialText, clonePartialElement);
 	}
 
 	this.deleteContents = function () {
-		// resync endpoints
-		var start, end;
-		anchorWithTempNode(textRange, function (temp) { start = findPreviousSibling(temp); }, true);
-		anchorWithTempNode(textRange, function (temp) { end = findNextSibling(temp); }, false);
-		// delete content
-		textRange.setHTML('');
-		// reset endpoints
-		this.setStartAfter(start);
-		this.setEndBefore(end);
+		// extract contents and return nothing
+		this.extractContents();
 	}
 
 	this.extractContents = function () {
-		// clone and delete contents
-		var content = this.cloneContents();
-		this.deleteContents();
+		// extraction methods
+		function extractPartialText(node, offset, length) {
+			var newNode = document.createTextNode(node.substringData(offset, length));
+			node.deleteData(offset, length);
+			return newNode;
+		}
+		function extractPartialElement(node, offset, length) {
+			var newNode = node.cloneNode(false);
+			while (node.childNodes[offset] && length--)
+				newNode.appendChild(extractSelectedNode(node.childNodes[offset]));
+			return newNode;
+		}
+		function extractSelectedNode(node) {
+			return node.parentNode.removeChild(node);
+		}
+
+		// get new anchors
+		var anchor = this.endContainer.nodeValue ? this.endContainer :
+		    this.endContainer.childNodes[this.endOffset];
+		// extract contents
+		var content = iterateRange(extractPartialText, extractPartialElement);
+		// set anchors
+		this.selectNode(anchor);
+		this.collapse(true);
+		// return content
 		return content;
 	}
 
 	this.insertNode = function (newNode) {
-		// insert node at beginning of range
-		anchorWithTempNode(textRange, function (temp) { temp.parentNode.replaceChild(newNode, temp); }, true);
-		// refresh range
-		this.setStartBefore(newNode);
-//[TODO] wouldn't have to do this if we didn't keep a running textrange...
-		this.setEnd(this.endContainer, this.endOffset);
+		// set original anchor and insert node
+		if (newNode.nodeValue) {
+			this.startContainer.parentNode.insertBefore(document.createTextNode(newNode.substringData(this.startOffset)), this.startContainer.nextSibling);
+			this.startContainer.parentNode.insertBefore(newNode, this.startContainer.nextSibling);
+			this.startContainer.deleteData(0, this.startOffset);
+		} else {
+			if (this.startOffset < this.startContainer.childNodes.length)
+				this.startContainer.parentNode.insertBefore(newNode, this.startContainer);
+			else
+				this.startContainer.insertBefore(newNode, this.startContainer.childNodes[this.startOffset]);
+		}
+		// resync start anchor
+		this.setStart(this.startContainer, this.startOffset);
 	}
 
 	this.surroundContents = function (newNode) {

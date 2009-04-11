@@ -6,8 +6,50 @@
 
 //[TODO] better error reporting
 
+function findChildPosition(node) {
+	for (var i = 0; node.previousSibling; node = node.previousSibling)
+		i++;
+	return i;
+}
+
+function findPreviousSibling(refNode) {
+	for (; !refNode.previousSibling && refNode.parentNode; refNode = refNode.parentNode);
+	return refNode.previousSibling || refNode;
+}
+
+function findNextSibling(refNode) {
+	for (; !refNode.nextSibling && refNode.parentNode; refNode = refNode.parentNode);
+	return refNode.nextSibling || refNode;
+}
+
+//[TODO] eliminate use of this
+function anchorWithTempNode(range, callback, bStart) {
+	// insert anchor at beginning of range
+	var newrange = range.duplicate();
+	newrange.collapse(bStart);
+	newrange.pasteHTML('<a id="_IERANGE_OFFSET"></a>');
+	var temp = document.getElementById('_IERANGE_OFFSET');
+
+	// call callback
+	callback(temp);
+
+	// merge split text nodes
+//[TODO] does this have to happen after removal to preserve selection?
+	if (temp.nextSibling && temp.nextSibling.nodeType == 3)
+	{
+		container.appendData(temp.nextSibling.nodeValue);
+		temp.parentNode.removeChild(temp.nextSibling);
+	}
+
+	// remove anchor
+	temp.parentNode.removeChild(temp);
+}
+
 // class to simplify text range manipulation in ie
-function IETextRange(range) {
+//[TODO] should this just be a set of utils?
+
+function TextRangeProxy(range)
+{
 	this.getOffset(bStart) {
 		return Math.abs(range.duplicate()[bStart ? 'moveStart' : 'moveEnd']('character', -1000000) );
 	}
@@ -17,91 +59,65 @@ function IETextRange(range) {
 	}
 	
 	this.findAnchor(bStart) {
-		
+		// returns
+		var container, offset = 0;
+		// find anchor using temp node
+		anchorWithTempNode(range, function (temp) {
+			if (temp.previousSibling)
+			{
+				// anchor is previous sibling
+//[TODO] isn't anchor next sibling?
+				container = temp.previousSibling;
+				// get text node offset
+				if (container.nodeType == 3)
+					offset = container.nodeValue.length;
+			}
+			else
+			{
+				// anchor is container node
+				container = temp.parentNode.parentNode;
+				offset = findChildPosition(temp.parentNode);
+			}
+		}, bStart);
+		return {container: container, offset: offset};
 	}
 	
-	this.loadFromAnchor(container, offset, bStart) {
-		
-	}
-}
-
-function getTextOffset(r, bStart) {
-	return Math.abs( r.duplicate()[bStart ? 'moveStart' : 'moveEnd']('character', -1000000) );
-}
-
-function findChildPosition(node) {
-	for (var i = 0; node.previousSibling; node = node.previousSibling)
-		i++;
-	return i;
-}
-
-function textOffsetToAnchor(tOffset) {
-	// returns
-	var container, offset = 0;
-
-	var range = document.body.createTextRange();
-	range.move('character', tOffset);
-	range.pasteHTML('<a id="_IERANGE_OFFSET"></a>');
-	var anchor = document.getElementById('_IERANGE_OFFSET');
-	if (anchor.previousSibling)
-	{
-		// anchor is previous sibling
-		container = anchor.previousSibling;
-		// get text node offset
-		if (container.nodeType == 3)
-		{
-			offset = container.nodeValue.length;
-			// merge split text nodes
-			if (container.nextSibling && container.nextSibling.nodeType == 3)
-			{
-				container.appendData(container.nextSibling.nodeValue);
-				container.parentNode.removeChild(container.nextSibling);
-			}
-		}
-	}
-	else
-	{
-		// anchor is container node
-		container = anchor.parentNode.parentNode;
-		offset = findChildPosition(anchor.parentNode);
-	}
-	anchor.parentNode.removeChild(anchor);
-	return {container: container, offset: offset};
-}
-
-function anchorToTextOffset(container, offset) {
-	// parameters based on anchor type
-	var anchorRef = container, tOffset = 0;
-	switch (container.nodeType)
-	{
-		case 3: // Text Node
-		case 4: // Character Data
-		case 8: // Comment
-		case 7: // Processing Instruction
-			// find text offset
+	this.moveToAnchor(container, offset, bStart) {
+		// parameters are based on anchor type (value vs. content)
+		var anchorRef = container, tOffset = 0;
+		// Text Node, Character Data (not Comment or Processing Instruction) data
+		if (container.nodeType == 3 || container.nodeType == 4)	
 			tOffset = offset;
-			break;
-
-		case 1: // Element
-		case 2:	// Attribute
-		case 5: // Entity Reference
-		case 9: // Document
-		case 11: // Document Fragment
-		default:
-			// find specified child
+		// Element, Attribute, Entity Reference, Document, Document Fragment, &c. children
+		else if (!container.nodeValue && offset < container.childNodes.length)
 			anchorRef = container.childNodes[offset];
-			break;
-	}
 
-	// create a dummy node to position range
-	var anchor = document.createElement('a');
-	anchorRef.parentNode.insertBefore(anchor, anchorRef);
-	var range = document.body.createTextRange();
-	range.moveToElementText(anchor);
-	// get text offset and remove dummy
-	tOffset += getTextOffset(range, true);
-	anchor.parentNode.removeChild(anchor);
-	return tOffset;
+		// create a dummy node to position range (since we can't select text nodes)
+		var temp = document.createElement('a');
+		anchorRef.parentNode.insertBefore(temp, anchorRef);
+		var range = document.body.createTextRange();
+		range.moveToElementText(anchor);
+//[TODO] does this order screw up things?
+		temp.parentNode.removeChild(temp);
+		// get text offset and remove dummy
+		tOffset += getTextOffset(range, true);
+		this.setOffset(tOffset, bStart);
+	}
+	
+	// copied methods
+	this.getCommonAncestorContainer = range.parentElement;
+//[TODO] save start position on setHTML
+	this.setHTML = function (html) {
+//		var start = this.getOffset(true);
+		range.pasteHTML(html);
+//		this.setOffset(true, start);
+	}
+	this.getHTML = function () { return range.htmlText; }
+	this.getText = function () { return range.text; }
+	this.collapse = range.collapse;
+	this.duplicate = range.duplicate;
+	this.select = range.select;
+	this.getNative = function () { return range; }
 }
 
 function DOMSelection() {
@@ -129,10 +145,6 @@ function DOMSelection() {
 	}
 }
 
-//[TODO] find a way to sync textrange with DOM changes: ranges should be more
-// DOM-oriented, less reliant on text postion (this means load(range))
-// maybe we don't maintain a running text range, but only update it as necessary
-
 function DOMRange(range) {
 //[TODO] take document parameter?
 	// closure
@@ -150,17 +162,16 @@ function DOMRange(range) {
 
 	function refreshProperties() {
 		editable.collapsed = (editable.startContainer == editable.endContainer && editable.startOffset == editable.endOffset);
-		editable.commonAncestorContainer = textRange.parentElement();
+		editable.commonAncestorContainer = textRange.getCommonAncestorContainer();
 	}
 
-	// loads text range
+	// load text range
 	function load(range) {
-		// load this text range
-		textRange = range;
-		var start = textOffsetToAnchor(getTextOffset(textRange, true));
+		textRange = new TextRangeProxy(range);
+		var start = textRange.findAnchor(true);
 		editable.startContainer = start.container;
 		editable.startOffset = start.offset;
-		var end = textOffsetToAnchor(getTextOffset(textRange, false));
+		var end = textRange.findAnchor(false);
 		editable.endContainer = end.container;
 		editable.endOffset = end.offset;
 		refreshProperties();
@@ -173,8 +184,8 @@ function DOMRange(range) {
 		this.startOffset = offset;
 		refreshProperties();
 		
-		// move start cursor
-		textRange.moveStart('character', anchorToTextOffset(container, offset) - getTextOffset(textRange, true));
+		// update internal text range
+		textRange.moveToAnchor(container, offset, true);
 	}
 
 	this.setEnd = function(container, offset) {
@@ -182,8 +193,8 @@ function DOMRange(range) {
 		this.endOffset = offset;
 		refreshProperties();
 
-		// move end cursor
-		textRange.moveEnd('character', anchorToTextOffset(container, offset) - getTextOffset(textRange, false));
+		// update internal text range
+		textRange.moveToAnchor(container, offset, false);
 	}
 
 	this.setStartBefore = function (refNode) {
@@ -192,9 +203,8 @@ function DOMRange(range) {
 	}
 
 	this.setStartAfter = function (refNode) {
-		// find next sibling
-		for (; !refNode.nextSibling; refNode = refNode.parentNode);
-		this.setStartBefore(refNode.nextSibling);
+		// select next sibling
+		this.setStartBefore(findNextSibling(refNode));
 	}
 
 	this.setEndBefore = function (refNode) {
@@ -203,9 +213,8 @@ function DOMRange(range) {
 	}
 
 	this.setEndAfter = function (refNode) {
-		// find next sibling
-		for (; !refNode.nextSibling; refNode = refNode.parentNode);
-		this.setEndBefore(refNode.nextSibling);
+		// select next sibling
+		this.setEndBefore(findNextSibling(refNode));
 	}
 
 	this.selectNode = function (refNode) {
@@ -214,13 +223,8 @@ function DOMRange(range) {
 	}
 
 	this.selectNodeContents = function (refNode) {
-		if (!refNode.firstChild)
-//[TODO] is that right?
-			this.selectNode(refNode);
-		else {
-			this.setStartBefore(refNode.firstChild);
-			this.setEndAfter(refNode.lastChild);
-		}
+		this.setStart(refNode, 0);
+		this.setEnd(refNode, refNode.nodeValue == null ? refNode.nodeValue.length - 1 : refNode.childNodes.length - 1);
 	}
 
 	this.collapse = function (toStart) {
@@ -231,22 +235,74 @@ function DOMRange(range) {
 	}
 
 	// editing methods
+//[TODO] the specs should really be followed on these (i.e. cloning vs. innerHTML)
+
+	function iterateRange(cbSelected, cbPartialElement, cbPartialText) {
+		// want to find beginning and end partial
+		var beginPartial = this.startContainer.nodeValue ? this.startContainer : this.startContainer.childNodes[this.startOffset];
+		while (beginPartial.parentNode != this.commonAncestorContainer)
+			beginPartial = beginPartial.parentNode;
+		var endPartial = this.startContainer.nodeValue ? this.startContainer : this.startContainer.childNodes[this.startOffset];
+		while (endPartial.parentNode != this.commonAncestorContainer)
+			endPartial = endPartial.parentNode;
+
+		// begin with partially selected nodes
+		var node, children = [];
+		if (this.startContainer.nodeValue) {
+			children.push(cbPartialText(this.startContainer, this.startOffset));
+			node = node.nextSibling;
+		} else {
+			node = this.startContainer.childNodes[this.startOffset];
+		}
+		for (node.parentNode != this.commonAncestorContainer; node = node.parentNode)
+			while 
+			children.push(cbSelected(node = node.nextSibling));
+			while (node.nextSibling && node.nextSibling != 
+		};
+		for (var node = this.startContainer.nodeValue ? this.startContainer : this.startContainer.childNodes[this.startOffset], children = [];
+		    node != this.commonAncestorContainer; node = node.parentNode) {
+			// current node
+			if (node.nodeValue) {
+				children.push(cbPartialText(this.startContainer, this.startOffset))
+				while (node.nextSibling)
+					children.push(cbSelected(node = node.nextSibling));
+			} else if (node == this.startContainer) {
+				
+			} else {
+			}
+			node == this.startContainer ?
+				node.nodeValue ?
+					parent.push(cbPartialText(this.startContainer, this.startOffset)) :
+				this.startOffset > 0 ? {
+					parent.push(cbPartialElement(node, children)
+			node == this.start
+				children.push(cbSelected(node));
+			// selected nodes
+			while (node.nextSibling)
+				children.push(cbSelected(node = node.nextSibling));
+		}
+	}
 
 	this.cloneContents = function () {
 		// return a document fragment copying the range nodes
 		var content = document.createDocumentFragment();
-		var temp = document.createElement('div');
-		temp.innerHTML = textRange.htmlText;
+		var temp = document.createElement('a');
+		temp.innerHTML = textRange.getHTML();
 		while (temp.firstChild)
 			content.appendChild(temp.firstChild);
 		return content;
 	}
 
 	this.deleteContents = function () {
-//[TODO] non-TextRange method of doing this?
-		// delete content and refresh
-		textRange.pasteHTML('');
-		load(textRange);
+		// resync endpoints
+		var start, end;
+		anchorWithTempNode(textRange, function (temp) { start = findPreviousSibling(temp); }, true);
+		anchorWithTempNode(textRange, function (temp) { end = findNextSibling(temp); }, false);
+		// delete content
+		textRange.setHTML('');
+		// reset endpoints
+		this.setStartAfter(start);
+		this.setEndBefore(end);
 	}
 
 	this.extractContents = function () {
@@ -257,15 +313,11 @@ function DOMRange(range) {
 	}
 
 	this.insertNode = function (newNode) {
-//[TODO] test if this works and preserves range! also, could we make this less hacky
 		// insert node at beginning of range
-		var range = document.body.createTextRange();
-		range.move('character', getTextOffset(textRange, true));
-		range.pasteHTML('<a id="_IERANGE_OFFSET"></a>');
-		var anchor = document.getElementById('_IERANGE_OFFSET');
-		anchor.parentNode.replaceChild(newNode, anchor);
+		anchorWithTempNode(textRange, function (temp) { temp.parentNode.replaceChild(newNode, temp); }, true);
 		// refresh range
 		this.setStartBefore(newNode);
+//[TODO] wouldn't have to do this if we didn't keep a running textrange...
 		this.setEnd(this.endContainer, this.endOffset);
 	}
 
@@ -274,8 +326,7 @@ function DOMRange(range) {
 		var content = this.extractContents();
 		this.insertNode(newNode);
 		newNode.appendChild(content);
-		this.setStartBefore(newNode);
-		this.setStartAfter(newNode);
+		this.selectNode(newNode);
 	}
 
 	// other
@@ -285,7 +336,10 @@ function DOMRange(range) {
 	}
 
 	this.cloneRange = function () {
-		return new DOMRange(textRange.duplicate());
+		var range = new DOMRange();
+		range.setStart(this.startcontainer, this.startOffset);
+		range.setEnd(this.endContainer, this.endOffset);
+		return range;
 	}
 
 	this.detach = function () {
@@ -293,20 +347,22 @@ function DOMRange(range) {
 	}
 
 	this.toString = function () {
-		return textRange.text;
+		return this.getTextRange().text;
 	}
 
 	this.createContextualFragment = function (tagString) {
 		// return a document fragment from the created node
-		var range = document.body.createTextRange();
-		range.move('character', getTextOffset(textRange, true));
-		range.pasteHTML(tagString);
+		var range = textRange.duplicate();
+		range.collapse(true);
+		range.setHTML(tagString);
+//[TODO] this may split text nodes...
+//[TODO] moveToStartPoint (setHTML resets range to end)
 		return (new DOMRange(range)).extractContents();
 	}
 
 	this.getTextRange = function () {
 		// return IE text range
-		return textRange;
+		return textRange.getNative();
 	}
 
 	// constructor
@@ -317,6 +373,8 @@ DOMRange.START_TO_START = 0;
 DOMRange.START_TO_END = 1;
 DOMRange.END_TO_END = 2;
 DOMRange.END_TO_START = 3;
+
+// document hooks
 
 document.createRange = function () {
 	return new DOMRange();

@@ -1,3 +1,11 @@
+/*
+  DOM Ranges for Internet Explorer (r5)
+  
+  Copyright (c) 2009 Tim Cameron Ryan
+  Released under the MIT/X License
+ */
+
+// Handy links:
 // http://stackoverflow.com/questions/164147/character-offset-in-an-internet-explorer-textrange
 // http://msdn.microsoft.com/en-us/library/ms535872.aspx#
 // http://jorgenhorstink.nl/test/javascript/range/range.js
@@ -17,17 +25,12 @@ var DOMUtils = {
 		for (var i = 0; node = node.previousSibling; i++);
 		return i;
 	},
-	findAdjacentSibling: function (refNode, bPrev) {
-		var dir = bPrev ? 'previousSibling' : 'nextSibling';
-		for (; !refNode[dir] && refNode.parentNode; refNode = refNode.parentNode);
-		return refNode[dir] || refNode;
-	},
 	isDataNode: function (node) {
-		return node && node.nodeValue != null && node.data != null;
+		return node && node.nodeValue !== null && node.data !== null;
 	},
 	isAncestorOf: function (parent, node) {
 		return !DOMUtils.isDataNode(parent) &&
-		    (parent.contains(DOMUtils.isDataNode(node) ? node.parentNode : node) ||
+		    (parent.contains(DOMUtils.isDataNode(node) ? node.parentNode : node) ||		    
 		    node.parentNode == parent);
 	},
 	getNodeLength: function (node) {
@@ -61,8 +64,7 @@ var TextRangeUtils = {
 		range[bStart ? 'moveStart' : 'moveEnd']('character', offset - TextRangeUtils.getOffset(range, bStart));
 	},
 	findAnchor: function (range, bStart) {
-		// get current selection
-//		var selection = document.selection.createRange();
+//[TODO] find a way to avoid splitting text nodes while preserving selection
 		// insert anchor at beginning of range
 		var newrange = range.duplicate();
 		newrange.collapse(bStart);
@@ -71,12 +73,8 @@ var TextRangeUtils = {
 
 		// get container node
 		var container = temp.parentNode, offset = DOMUtils.findChildPosition(temp);
-		// merge split text nodes
-//		DOMUtils.mergeDataNodes(temp.previousSibling, temp.nextSibling);
-
 		// cleanup and return data
 		temp.parentNode.removeChild(temp);
-//		selection.select();
 		return {container: container, offset: offset};
 	},
 	moveToAnchor: function (range, container, offset, bStart) {
@@ -104,145 +102,84 @@ var TextRangeUtils = {
 /*
   DOM Range
  */
+ 
+function DOMRange(document, range) {
+//[TODO] actually save document parameter
+	this.loadTextRange(range || document.body.createTextRange());
+}
+DOMRange.START_TO_START = 0;
+DOMRange.START_TO_END = 1;
+DOMRange.END_TO_END = 2;
+DOMRange.END_TO_START = 3;
 
-window.DOMRange = function (document) {
-	// closure
-	var domRange = this;
-
+DOMRange.prototype = {
 	// properties
-	this.startContainer = null;
-	this.startOffset = 0;
-	this.endContainer = null;
-	this.endOffset = 0;
-	this.commonAncestorContainer = null;
-	this.collapsed = false;
-
-	function refreshProperties() {
+	startContainer: null,
+	startOffset: 0,
+	endContainer: null,
+	endOffset: 0,
+	commonAncestorContainer: null,
+	collapsed: false,
+	
+	// private methods
+	_refreshProperties: function () {
 		// collapsed attribute
-		domRange.collapsed = (domRange.startContainer == domRange.endContainer && domRange.startOffset == domRange.endOffset);
+		this.collapsed = (this.startContainer == this.endContainer && this.startOffset == this.endOffset);
 		// find common ancestor
-		var node = domRange.startContainer;
-		while (node && node != domRange.endContainer && !DOMUtils.isAncestorOf(node, domRange.endContainer))
+		var node = this.startContainer;
+		while (node && node != this.endContainer && !DOMUtils.isAncestorOf(node, this.endContainer))
 			node = node.parentNode;
-		domRange.commonAncestorContainer = node;
+		this.commonAncestorContainer = node;
 		
 		// trigger listeners
-		for (var i = 0; i < listeners.length; i++)
-			listeners[i][this];
-	}
-
-	// load text range
-	function load(textRange) {
-		var start = TextRangeUtils.findAnchor(textRange, true);
-		domRange.startContainer = start.container;
-		domRange.startOffset = start.offset;
-		var end = TextRangeUtils.findAnchor(textRange, false);
-		domRange.endContainer = end.container;
-		domRange.endOffset = end.offset;
-		refreshProperties();
-	}
+		for (var i = 0; i < this._listeners.length; i++)
+			this._listeners[i][this];
+	},
 	
 	// range methods
-
-	this.setStart = function(container, offset) {
+	setStart: function(container, offset) {
 		this.startContainer = container;
 		this.startOffset = offset;
-		refreshProperties();
-	}
-
-	this.setEnd = function(container, offset) {
+		this._refreshProperties();
+	},
+	setEnd: function(container, offset) {
 		this.endContainer = container;
 		this.endOffset = offset;
-		refreshProperties();
-	}
-
-	this.setStartBefore = function (refNode) {
+		this._refreshProperties();
+	},
+	setStartBefore: function (refNode) {
 		// set start to beore this node
 		this.setStart(refNode.parentNode, DOMUtils.findChildPosition(refNode));
-	}
-
-	this.setStartAfter = function (refNode) {
+	},
+	setStartAfter: function (refNode) {
 		// select next sibling
 		this.setStart(refNode.parentNode, DOMUtils.findChildPosition(refNode) + 1);
-	}
-
-	this.setEndBefore = function (refNode) {
+	},
+	setEndBefore: function (refNode) {
 		// set end to beore this node
 		this.setEnd(refNode.parentNode, DOMUtils.findChildPosition(refNode));
-	}
-
-	this.setEndAfter = function (refNode) {
+	},
+	setEndAfter: function (refNode) {
 		// select next sibling
 		this.setEnd(refNode.parentNode, DOMUtils.findChildPosition(refNode) + 1);
-	}
-
-	this.selectNode = function (refNode) {
+	},
+	selectNode: function (refNode) {
 		this.setStartBefore(refNode);
 		this.setEndAfter(refNode);
-	}
-
-	this.selectNodeContents = function (refNode) {
+	},
+	selectNodeContents: function (refNode) {
 		this.setStart(refNode, 0);
 		this.setEnd(refNode, DOMUtils.getNodeLength(redNode));
-	}
-
-	this.collapse = function (toStart) {
+	},
+	collapse: function (toStart) {
 		if (toStart)
 			this.setEnd(this.startContainer, this.startOffset);
 		else
 			this.setStart(this.endContainer, this.endOffset);
-	}
+	},
 
 	// editing methods
-
-	this.cloneContents = function () {
-		// cloning methods
-		function clonePartialText(node, offset, length) {
-			return document.createTextNode(node.substringData(offset, length));
-		}
-		function clonePartialElement(node, offset, length) {
-			var newNode = node.cloneNode(false);
-			for (var child = node.childNodes[offset]; child && length--; child = child.nextSibling)
-				newNode.appendChild(child.cloneNode(true));
-			return newNode;
-		}
-
-		// clone contents
-		return (new RangeIterator(clonePartialText, clonePartialElement)).iterate(domRange);
-	}
-
-	this.deleteContents = function () {
-		// extract contents and return nothing
-		this.extractContents();
-	}
-
-	this.extractContents = function () {
-		// extraction methods
-		function extractPartialText(node, offset, length) {
-			var newNode = document.createTextNode(node.substringData(offset, length));
-			node.deleteData(offset, length);
-			return newNode;
-		}
-		function extractPartialElement(node, offset, length) {
-			var newNode = node.cloneNode(false);
-			while (node.childNodes[offset] && length--)
-				newNode.appendChild(node.removeChild(node.childNodes[offset]));
-			return newNode;
-		}
-
-		// get new anchors
-		var anchor = DOMUtils.isDataNode(this.endContainer) || this.endOffset >= this.endContainer.childNodes.length ?
-		    this.endContainer : this.endContainer.childNodes[this.endOffset];
-		// extract contents
-		var content = (new RangeIterator(extractPartialText, extractPartialElement)).iterate(domRange);
-		// set anchors
-		this.selectNode(anchor);
-		this.collapse(true);
-		// return content
-		return content;
-	}
-
-	this.insertNode = function (newNode) {
+	insertNode: function (newNode) {
 		// set original anchor and insert node
 		if (DOMUtils.isDataNode(this.startContainer)) {
 			DOMUtils.splitDataNode(this.startContainer, this.startOffset);
@@ -252,38 +189,63 @@ window.DOMRange = function (document) {
 		}
 		// resync start anchor
 		this.setStart(this.startContainer, this.startOffset);
-	}
-
-	this.surroundContents = function (newNode) {
+	},
+	surroundContents: function (newNode) {
 		// extract and surround contents
 		var content = this.extractContents();
 		this.insertNode(newNode);
 		newNode.appendChild(content);
 		this.selectNode(newNode);
-	}
+	},
 
-	// other
-
-	this.compareBoundaryPoints = function (how, sourceRange) {
-//[TODO] Compares the boundary points of two Ranges. 
-	}
-
-	this.cloneRange = function () {
+	// other methods
+	compareBoundaryPoints: function (how, sourceRange) {
+		// get anchors
+		var containerA, offsetA, containerB, offsetB;
+		switch (how) {
+		    case DOMRange.START_TO_START:
+		    case DOMRange.START_TO_END:
+			containerA = this.startContainer;
+			offsetA = this.startOffset;
+			break;
+		    case DOMRange.END_TO_END:
+		    case DOMRange.END_TO_START:
+			containerA = this.endContainer;
+			offsetA = this.endOffset;
+			break;
+		}
+		switch (how) {
+		    case DOMRange.START_TO_START:
+		    case DOMRange.END_TO_START:
+			containerB = sourceRange.startContainer;
+			offsetB = sourceRange.startOffset;
+			break;
+		    case DOMRange.START_TO_END:
+		    case DOMRange.END_TO_END:
+			containerB = sourceRange.endContainer;
+			offsetB = sourceRange.endOffset;
+			break;
+		}
+		
+		// compare
+		return containerA.sourceIndex < containerB.sourceIndex ? -1 :
+		    containerA.sourceIndex == containerB.sourceIndex ?
+		        offsetA < offsetB ? -1 : offsetA == offsetB ? 0 : 1
+		        : 1;
+	},
+	cloneRange: function () {
 		var range = new DOMRange();
 		range.setStart(this.startcontainer, this.startOffset);
 		range.setEnd(this.endContainer, this.endOffset);
 		return range;
-	}
-
-	this.detach = function () {
+	},
+	detach: function () {
 //[TODO] Releases Range from use to improve performance. 
-	}
-
-	this.toString = function () {
+	},
+	toString: function () {
 		return this.getTextRange().text;
-	}
-
-	this.createContextualFragment = function (tagString) {
+	},
+	createContextualFragment: function (tagString) {
 		// parse the tag string in a context node
 		var content = (DOMUtils.isDataNode(this.startContainer) ? this.startContainer.parentNode : this.startContainer).cloneNode(false);
 		content.innerHTML = tagString;
@@ -291,36 +253,38 @@ window.DOMRange = function (document) {
 		for (var fragment = document.createDocumentFragment(); content.firstChild; )
 			fragment.appendChild(content.firstChild);
 		return fragment;
-	}
+	},
 
-	this.getTextRange = function () {
+	// text range manipulation
+	getTextRange: function () {
 		// return an IE text range
 		var textRange = document.body.createTextRange();
 		TextRangeUtils.moveToAnchor(textRange, this.startContainer, this.startOffset, true);
 		TextRangeUtils.moveToAnchor(textRange, this.endContainer, this.endOffset, false);
 		return textRange;
-	}
+	},
+	loadTextRange: function (textRange) {
+		var start = TextRangeUtils.findAnchor(textRange, true);
+		this.startContainer = start.container;
+		this.startOffset = start.offset;
+		var end = TextRangeUtils.findAnchor(textRange, false);
+		this.endContainer = end.container;
+		this.endOffset = end.offset;
+		this._refreshProperties();
+	},
 	
-	// selection hooks
-	var listeners = [];
-	this.addListener = function (listener) {
-		listeners.push(listener);
-	}
-	this.removeListener = function (listener) {
-		for (var i = 0; i < listeners.length; i++) {
-			if (listeners[i] = listener)
-				listeners = listeners.splice(i, 1);
+	// changelisteners
+	_listeners: [],
+	addListener: function (listener) {
+		this._listeners.push(listener);
+	},
+	removeListener: function (listener) {
+		for (var i = 0; i < this._listeners.length; i++) {
+			if (this._listeners[i] = listener)
+				listeners = this._listeners.splice(i, 1);
 		}
 	}
-
-	// constructor
-	load(arguments.length > 1 ? arguments[1] : document.body.createTextRange());
 }
-
-DOMRange.START_TO_START = 0;
-DOMRange.START_TO_END = 1;
-DOMRange.END_TO_END = 2;
-DOMRange.END_TO_START = 3;
 
 /*
   Range Iterator
@@ -365,24 +329,80 @@ function RangeIterator(partialText, partialElement) {
 	}
 }
 
+// range editing methods
+DOMRange.prototype.cloneContents = function () {
+	// cloning methods
+	function clonePartialText(node, offset, length) {
+		return document.createTextNode(node.substringData(offset, length));
+	}
+	function clonePartialElement(node, offset, length) {
+		var newNode = node.cloneNode(false);
+		for (var child = node.childNodes[offset]; child && length--; child = child.nextSibling)
+			newNode.appendChild(child.cloneNode(true));
+		return newNode;
+	}
+
+	// clone contents
+	return (new RangeIterator(clonePartialText, clonePartialElement)).iterate(domRange);
+}
+DOMRange.prototype.deleteContents = function () {
+	// extract contents and return nothing
+	this.extractContents();
+}
+DOMRange.prototype.extractContents = function () {
+	// extraction methods
+	function extractPartialText(node, offset, length) {
+		var newNode = document.createTextNode(node.substringData(offset, length));
+		node.deleteData(offset, length);
+		return newNode;
+	}
+	function extractPartialElement(node, offset, length) {
+		var newNode = node.cloneNode(false);
+		while (node.childNodes[offset] && length--)
+			newNode.appendChild(node.removeChild(node.childNodes[offset]));
+		return newNode;
+	}
+
+	// get new anchors
+	var anchor = DOMUtils.isDataNode(this.endContainer) || this.endOffset >= this.endContainer.childNodes.length ?
+	    this.endContainer : this.endContainer.childNodes[this.endOffset];
+	// extract contents
+	var content = (new RangeIterator(extractPartialText, extractPartialElement)).iterate(domRange);
+	// set anchors
+	this.selectNode(anchor);
+	this.collapse(true);
+	// return content
+	return content;
+}
+
 /*
   DOM Selection
  */
 
+function DOMSelection(document) {
+//[TODO] actually save document parameter
+	// add DOM selection handler
+	var selection = this;
+	document.attachEvent('onselectionchange', function () { selection._selectionChangeHandler(); });
+	// add initial range
+	var range = document.selection.createRange();
+	if (TextRangeUtils.getOffset(range, true) != 0 && TextRangeUtils.getOffset(range, false) != 0)
+		this.addRange(new DOMRange(range));
+}
 
-window.DOMSelection = function () {
-	var ranges = [];
-	var domSelection = this;
-	this.rangeCount = 0;
+DOMSelection.prototype = {
+	// public properties
+	rangeCount: 0,
+	// private properties
+	_ranges: [],
+	_canChangeSelection: true,
 	
-	var selectionEnabled = true;
-	
-	// update range objects when selection is changed
-	function selectionHandler() {
+	// private methods
+	_selectionChangeHandler: function () {
 		// check if we can update selection
-		if (!selectionEnabled)
+		if (!this._canChangeSelection)
 			return;
-		selectionEnabled = false;
+		this._canChangeSelection = false;
 
 		// get new anchor points
 		selection = document.selection.createRange();
@@ -391,30 +411,26 @@ window.DOMSelection = function () {
 
 		// update ranges
 		selectionEnabled = false;
-		for (var i = 0; i < ranges.length; i++) {
-			ranges[i].setStart(start.container, start.offset);
-			ranges[i].setEnd(end.container, end.offset);
+		for (var i = 0; i < this._ranges.length; i++) {
+			this._ranges[i].setStart(start.container, start.offset);
+			this._ranges[i].setEnd(end.container, end.offset);
 		}
 		// create range if none exists
-		if (!ranges.length)
-			domSelection.addRange(new DOMRange(selection));
+		if (!this._ranges.length)
+			this.addRange(new DOMRange(selection));
 			
 		// enable selection
-		selectionEnabled = true;
-	}	
-	// add DOM selection handler
-	document.attachEvent('onselectionchange', selectionHandler);
-	
-	// update on-screen selection when ranges are changed
-	function updateSelection() {
+		this._canChangeSelection = true;
+	},
+	_rangeChangeHandler: function () {
 		// check if we can update selection
-		if (!selectionEnabled)
+		if (!this._canChangeSelection)
 			return;
-		selectionEnabled = false;
+		this._canChangeSelection = false;
 			
 		// iterate ranges
-		for (var start = [], end = [], i = 0; i < ranges.length; i++) {
-			var range = ranges[i].getTextRange();
+		for (var start = [], end = [], i = 0; i < this._ranges.length; i++) {
+			var range = this._ranges[i].getTextRange();
 			start.push(TextRangeUtils.getOffset(range, true));
 			end.push(TextRangeUtils.getOffset(range, false));
 		}
@@ -426,42 +442,39 @@ window.DOMSelection = function () {
 		range.select();
 		
 		// enable selection
-		selectionEnabled = true;
-	}
-
-	this.addRange = function (range) {
-		ranges.push(range);
-		this.rangeCount = ranges.length;
-		range.addListener(updateSelection);
-		updateSelection();
-	}
-
-	this.removeRange = function (range) {
-		for (var i = 0; i < ranges.length; i++) {
-			if (ranges[i] == range) {
-				ranges = ranges.splice(i, 1);
-				range.removeListener(updateSelection);
+		this._canChangeSelection = true;
+	},
+	
+	// public methods
+	addRange: function (range) {
+		// add range and update selection
+		this._ranges.push(range);
+		this.rangeCount = this._ranges.length;
+		range.addListener(this._rangeChangeHandler);
+		this._rangeChangeHandler();
+	},
+	removeRange: function (range) {
+		// remove the range from selection
+		for (var i = 0; i < this._ranges.length; i++) {
+			if (this._ranges[i] == range) {
+				this._ranges.splice(i, 1);
+				range.removeListener(this._rangeChangeHandler);
 			}
 		}
-	}
-
-	this.removeAllRanges = function () {
-		while (ranges.length)
-			this.removeRange(ranges[0]);
-	}
-
-	this.getRangeAt = function (index) {
-		return ranges[index];
-	}
-
-	this.toString = function () {
+	},
+	removeAllRanges: function () {
+		// remove all ranges
+		while (this._ranges.length)
+			this.removeRange(this._ranges[0]);
+	},
+	getRangeAt: function (index) {
+		// get specified range
+		return this._ranges[index];
+	},
+	toString: function () {
+		// get selection text
 		return document.selection.createRange().text;
 	}
-	
-	// add initial range
-	var range = document.selection.createRange();
-	if (TextRangeUtils.getOffset(range, true) != 0 && TextRangeUtils.getOffset(range, false) != 0)
-		this.addRange(new DOMRange(range));
 }
 
 /*
@@ -473,9 +486,11 @@ document.createRange = function () {
 }
 
 window.getSelection = function () {
-	var selection = new DOMSelection();
+	var selection = new DOMSelection(document);
 	window.getSelection = function () { return selection; }
 	return selection;
 }
+
+//[TODO] expose DOMRange/DOMSelection to window.?
 
 })();

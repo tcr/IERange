@@ -1,0 +1,43 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+  <head>
+    <title>W3c Range</title>
+
+    <script type='text/javascript' 
+        src='http://getfirebug.com/releases/lite/1.2/firebug-lite-compressed.js'></script>
+    <!--[if IE]><script type="text/javascript" src="IERange.js"></script><![endif]-->
+
+    <script>
+    
+    var a;
+    
+window.onload = function (e) {
+	// make a selection
+	var sel = window.getSelection();
+	var range = document.createRange();
+	range.setStart(document.getElementById('paragraph').firstChild.firstChild, 2);
+	range.setEnd(document.getElementById('paragraph').lastChild, 2);
+	sel.addRange(range);
+	a = range;
+	console.log(a);
+	
+//	var span = document.createElement('span');
+//	span.style.background = 'red';
+//	range.surroundContents(span);
+
+	// get the range
+//	var RangeDecomposed = sel.getRangeAt(0);
+//[TODO] ensure this works
+}
+
+document.onkeydown = function () {
+	console.log(a);
+}
+
+    </script>
+
+  </head>
+  <body>
+    <p id="paragraph"><strong>foo<!-- -->bar</strong>Heading 1<em>foo<!-- -->bar</em></p>
+  </body>
+</html>

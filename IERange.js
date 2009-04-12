@@ -1,17 +1,25 @@
 /*
-  DOM Ranges for Internet Explorer (r5)
+  DOM Ranges for Internet Explorer (m1)
   
   Copyright (c) 2009 Tim Cameron Ryan
   Released under the MIT/X License
  */
-
-// Handy links:
-// http://stackoverflow.com/questions/164147/character-offset-in-an-internet-explorer-textrange
-// http://msdn.microsoft.com/en-us/library/ms535872.aspx#
-// http://jorgenhorstink.nl/test/javascript/range/range.js
-// http://jorgenhorstink.nl/2006/07/05/dom-range-implementation-in-ecmascript-completed/
-// http://dylanschiemann.com/articles/dom2Range/dom2RangeExamples.html
-// http://www.w3.org/TR/DOM-Level-2-Traversal-Range/ranges.html
+ 
+/*
+  Range reference:
+    http://www.w3.org/TR/DOM-Level-2-Traversal-Range/ranges.html
+    http://mxr.mozilla.org/mozilla-central/source/content/base/src/nsRange.cpp
+    https://developer.mozilla.org/En/DOM:Range
+  Selection reference:
+    http://trac.webkit.org/browser/trunk/WebCore/page/DOMSelection.cpp
+  TextRange reference:
+    http://msdn.microsoft.com/en-us/library/ms535872.aspx#  
+  Other links:
+    http://stackoverflow.com/questions/164147/character-offset-in-an-internet-explorer-textrange
+    http://jorgenhorstink.nl/test/javascript/range/range.js
+    http://jorgenhorstink.nl/2006/07/05/dom-range-implementation-in-ecmascript-completed/
+    http://dylanschiemann.com/articles/dom2Range/dom2RangeExamples.html
+*/
 
 //[TODO] better exception support
 
@@ -106,7 +114,11 @@ var TextRangeUtils = {
  */
  
 function DOMRange(document, range) {
-//[TODO] actually save document parameter
+	// save document parameter
+	this._document = document;
+	
+	// initialize range
+//[TODO] should encompass body?
 	this.startContainer = this.endContainer = document.body;
 	this.endOffset = DOMUtils.getNodeLength(document.body);
 	if (range)
@@ -118,13 +130,15 @@ DOMRange.END_TO_END = 2;
 DOMRange.END_TO_START = 3;
 
 DOMRange.prototype = {
-	// properties
+	// public properties
 	startContainer: null,
 	startOffset: 0,
 	endContainer: null,
 	endOffset: 0,
 	commonAncestorContainer: null,
 	collapsed: false,
+	// private properties
+	_document: null,
 	
 	// private methods
 	_refreshProperties: function () {
@@ -236,7 +250,7 @@ DOMRange.prototype = {
 	},
 	cloneRange: function () {
 		// return cloned range (directly copying properties for speed)
-		var range = new DOMRange(document);
+		var range = new DOMRange(this._document);
 		range.startContainer = this.startContainer;
 		range.startOffset = this.startOffset;
 		range.endContainer = this.endContainer;
@@ -256,7 +270,7 @@ DOMRange.prototype = {
 		var content = (DOMUtils.isDataNode(this.startContainer) ? this.startContainer.parentNode : this.startContainer).cloneNode(false);
 		content.innerHTML = tagString;
 		// return a document fragment from the created node
-		for (var fragment = document.createDocumentFragment(); content.firstChild; )
+		for (var fragment = this._document.createDocumentFragment(); content.firstChild; )
 			fragment.appendChild(content.firstChild);
 		return fragment;
 	},
@@ -264,11 +278,12 @@ DOMRange.prototype = {
 	// text range manipulation
 	getTextRange: function () {
 		// return an IE text range
-		var textRange = document.body.createTextRange();
+		var textRange = this._document.body.createTextRange();
 		TextRangeUtils.moveToAnchor(textRange, this.startContainer, this.startOffset, true);
 		TextRangeUtils.moveToAnchor(textRange, this.endContainer, this.endOffset, false);
 		return textRange;
 	},
+//[TODO] move this to TextRangeUtils?
 	loadTextRange: function (textRange) {
 		var start = TextRangeUtils.findAnchor(textRange, true);
 		this.startContainer = start.container;
@@ -317,7 +332,7 @@ function RangeIterator(partialText, partialElement) {
 		container.insertBefore(iteratePartialRange(domRange.startContainer, domRange.startOffset, true), container.firstChild);
 		container.appendChild(iteratePartialRange(domRange.endContainer, domRange.endOffset, false));
 		// convert to document fragment
-		for (var nodes = document.createDocumentFragment(); container.firstChild; )
+		for (var nodes = this._document.createDocumentFragment(); container.firstChild; )
 			nodes.appendChild(container.firstChild);
 		return nodes;
 	}
@@ -326,8 +341,9 @@ function RangeIterator(partialText, partialElement) {
 // range editing methods
 DOMRange.prototype.cloneContents = function () {
 	// cloning methods
+	var range = this;
 	function clonePartialText(node, offset, length) {
-		return document.createTextNode(node.substringData(offset, length));
+		return range._document.createTextNode(node.substringData(offset, length));
 	}
 	function clonePartialElement(node, offset, length) {
 		var newNode = node.cloneNode(false);
@@ -345,8 +361,9 @@ DOMRange.prototype.deleteContents = function () {
 }
 DOMRange.prototype.extractContents = function () {
 	// extraction methods
+	var range = this;
 	function extractPartialText(node, offset, length) {
-		var newNode = document.createTextNode(node.substringData(offset, length));
+		var newNode = range._document.createTextNode(node.substringData(offset, length));
 		node.deleteData(offset, length);
 		return newNode;
 	}
@@ -372,14 +389,18 @@ DOMRange.prototype.extractContents = function () {
 /*
   DOM Selection
  */
+ 
+//[NOTE] This is a very shallow implementation of the Selection object, based on Webkit's
+// implementation and without redundant features. Complete selection manipulation is still
+// possible with just removeAllRanges/addRange/getRangeAt.
 
 function DOMSelection(document) {
-//[TODO] actually save document parameter
+	// save document parameter;
+	this._document = document
+	
 	// add DOM selection handler
 	var selection = this;
-	document.attachEvent('onselectionchange', function () { selection._selectionChangeHandler(); });
-	// initialize ranges
-	this._selectionChangeHandler();
+	document.attachEvent('onselectionchange', function (e) { selection._selectionChangeHandler(e); });
 }
 
 DOMSelection.prototype = {
@@ -388,45 +409,32 @@ DOMSelection.prototype = {
 	// private properties
 	_ranges: [],
 	_canChangeSelection: true,
+	_document: null,
 	
 	// private methods
-	_selectionChangeHandler: function () {
+	_selectionChangeHandler: function (e) {
 		// check if we can update selection
 		if (!this._canChangeSelection)
 			return;
-		this._canChangeSelection = false;
 		
 		// clear ranges list
-		this.removeAllRanges();		
-		// add any existing selection
-		var textRange = document.selection.createRange();
-		if (TextRangeUtils.getOffset(textRange, true) != 0 ||
-		    TextRangeUtils.getOffset(textRange, false) != 0)
-			this.addRange(new DOMRange(document, textRange));
-		
-		// enable selection
-		this._canChangeSelection = true;
+		this._ranges = [];
+		// add any existing selection, or a cursor position in content editable mode
+		var textRange = this._document.selection.createRange();
+		if (textRange.compareEndPoints('StartToEnd', textRange) != 0 ||
+		    textRange.parentElement().isContentEditable)
+			this._ranges.push(new DOMRange(this._document, this._document.selection.createRange()));
+		this.rangeCount = this._ranges.length;
 	},
-	_refreshSelection: function () {
+	_refreshSelectionFromRanges: function () {
 		// check if we can update selection
-		if (!this._canChangeSelection)
-			return;
 		this._canChangeSelection = false;
 		
 		// update range count
 		this.rangeCount = this._ranges.length;
-		// iterate ranges
-		for (var start = [], end = [], i = 0; i < this._ranges.length; i++) {
-			var range = this._ranges[i].getTextRange();
-			start.push(TextRangeUtils.getOffset(range, true));
-			end.push(TextRangeUtils.getOffset(range, false));
-		}
-
-		// select new range
-		var range = document.body.createTextRange();
-		TextRangeUtils.setOffset(range, true, Math.min.apply(null, start) || 0);
-		TextRangeUtils.setOffset(range, false, Math.max.apply(null, end) || 0);
-		range.select();
+		// select ranges
+		for (var i = 0; i < this._ranges.length; i++)
+			this._ranges[i].getTextRange().select();
 		
 		// enable selection
 		this._canChangeSelection = true;
@@ -434,33 +442,36 @@ DOMSelection.prototype = {
 	
 	// public methods
 	addRange: function (range) {
-		// add range and update selection
-		this._ranges.push(range.cloneRange());
-		this._refreshSelection();
-	},
-	removeRange: function (range) {
-		// remove the range from selection
-		for (var i = 0; i < this._ranges.length; i++) {
-			if (this._ranges[i].startContainer == range.startContainer && 
-			    this._ranges[i].startOffset == range.startOffset && 
-			    this._ranges[i].endContainer == range.endContainer && 
-			    this._ranges[i].endOffset == range.endOffset)
-				this._ranges.splice(i, 1);
+		// add range or combine with existing range
+		if (!this._ranges.length)
+			this._ranges.push(range.cloneRange());
+		else {
+			// only modify range if it intersects with current range
+			var selection = this._ranges[0];
+			if (range.compareBoundaryPoints(DOMRange.START_TO_START, selection) == -1)
+				if (range.compareBoundaryPoints(DOMRange.START_TO_END, selection) > -1 &&
+				    range.compareBoundaryPoints(DOMRange.END_TO_END, selection) == -1)
+					selection.setStart(range.startContainer, range.startOffset);
+			else
+				if (range.compareBoundaryPoints(DOMRange.END_TO_START, selection) < 1 &&
+				    range.compareBoundaryPoints(DOMRange.END_TO_END, selection) > -1)
+					selection.setEnd(range.endContainer, range.endOffset);
 		}
+		this._refreshSelectionFromRanges();
 	},
 	removeAllRanges: function () {
 		// remove all ranges
-		while (this._ranges.length)
-			this.removeRange(this._ranges[0]);
-		this._refreshSelection();
+		this._document.selection.empty();
+		this._ranges = [];
+		this._refreshSelectionFromRanges();
 	},
 	getRangeAt: function (index) {
 		// get specified range
-		return this._ranges[index].cloneRange();
+		return this._ranges[index] && this._ranges[index].cloneRange();
 	},
 	toString: function () {
 		// get selection text
-		return document.selection.createRange().text;
+		return this._document.selection.createRange().text;
 	}
 }
 
@@ -472,9 +483,8 @@ document.createRange = function () {
 	return new DOMRange(document);
 }
 
+var selection = new DOMSelection(document);
 window.getSelection = function () {
-	var selection = new DOMSelection(document);
-	window.getSelection = function () { return selection; }
 	return selection;
 }
 

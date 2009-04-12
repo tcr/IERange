@@ -8,13 +8,14 @@
     <!--[if IE]><script type="text/javascript" src="IERange.js"></script><![endif]-->
 
     <script>
-    
+  
 window.onload = function (e) {
 	// make a selection
-	var sel = window.getSelection();
 	var range = document.createRange();
 	range.setStart(document.getElementById('paragraph').firstChild.firstChild, 2);
 	range.setEnd(document.getElementById('paragraph').lastChild, 2);
+	var sel = window.getSelection();
+	sel.removeAllRanges();
 	sel.addRange(range);
 	console.log(range);
 }
@@ -24,12 +25,13 @@ function hilight() {
 	span.style.background = 'red';
 	window.getSelection().getRangeAt(0).surroundContents(span);
 }
-
+	
     </script>
 
   </head>
   <body>
     <p id="paragraph"><strong>foo<!-- -->bar</strong>Heading 1<em>foo<!-- -->bar</em></p>
+    <p contentEditable="true">asdfasdfasdfA</p>
     <input type="button" value="Log Current Selection" onclick="console.log(window.getSelection())">
     <input type="button" value="Log Current Range" onclick="console.log(window.getSelection().getRangeAt(0))">
     <input type="button" value="Hilight" onclick="hilight()">

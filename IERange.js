@@ -60,89 +60,63 @@ var DOMUtils = {
  */
 
 var TextRangeUtils = {
-//[TODO] these functions are redundant
-	// offsets
-	getOffset: function (range, bStart) {
-		return Math.abs(range.duplicate()[bStart ? 'moveStart' : 'moveEnd']('character', -1000000));		
+	convertToDOMRange: function (textRange, document) {
+		// return a DOM range
+		var domRange = new DOMRange(document);
+		TextRangeUtils.moveDOMRangeToTextRangeBoundary(domRange, textRange, true);
+		TextRangeUtils.moveDOMRangeToTextRangeBoundary(domRange, textRange, false);
+		return domRange;
 	},
-	setOffset: function (range, bStart, offset) {
-		range[bStart ? 'moveStart' : 'moveEnd']('character', offset - TextRangeUtils.getOffset(range, bStart));
-	},
-	
-	// anchor manipulation
-	findAnchor: function (range, bStart) {
-		// iterate through parent element to find anchor location
-		var cursorNode = document.createElement('a'), cursor = range.duplicate();
+	moveDOMRangeToTextRangeBoundary: function (domRange, textRange, bStart) {
+		// iterate backwards through parent element to find anchor location
+		var cursorNode = document.createElement('a'), cursor = textRange.duplicate();
 		cursor.collapse(bStart);
-		var parent = cursor.parentElement(), container, offset = 0;
-		
-		// search backwards through parent
+		var parent = cursor.parentElement();
 		do {
 			// position dummy and get position
 			parent.insertBefore(cursorNode, cursorNode.previousSibling);
 			cursor.moveToElementText(cursorNode);
 
 			// if we exceed or meet the cursor, we've found the node
-			if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', range) == -1 && cursorNode.nextSibling) {
+			if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) == -1 && cursorNode.nextSibling) {
 				// data node
-				container = cursorNode.nextSibling;
-				offset = TextRangeUtils.getOffset(range, bStart) - TextRangeUtils.getOffset(cursor, true);
+				cursor.setEndPoint('EndToEnd', textRange);
+				domRange[bStart ? 'setStart', 'setEnd'](cursorNode.nextSibling, cursor.text.length);
 				break;
-			} else if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', range) < 1) {
+			} else if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) < 1) {
 				// element
-				container = parent;
-				offset = DOMUtils.findChildPosition(cursorNode);
+				domRange[bStart ? 'setStartBefore' : 'setEndBefore'](cursorNode);
 				break;
 			}
 		} while (cursorNode.previousSibling);
-		// remove cursor and return anchor
 		cursorNode.parentNode.removeChild(cursorNode);
-		return {container: container, offset: offset};
 	},
-	moveToAnchor: function (range, container, offset, bStart) {
-		// parameters are based on anchor type (value vs. content)
-		var anchorContainer, anchorNode, tOffset = 0;
-		// Text Node, Character Data (not Comment or Processing Instruction) data
-		if (container.nodeType == 3 || container.nodeType == 4)
-		{
-			anchorContainer = container.parentNode;
-			anchorNode = container;
-			tOffset = offset;
-		}
-		// Element, Attribute, Entity Reference, Document, Document Fragment, &c. children
-		else if (!DOMUtils.isDataNode(container))
-		{
-			anchorContainer = container;
-			anchorNode = container.childNodes[offset];
-		}
 
-		// create a cursor node to position range (since we can't select text nodes)
-		var cursorNode = document.createElement('a');
-		anchorContainer.insertBefore(cursorNode, anchorNode);
-		var cursor = document.body.createTextRange();
-		cursor.moveToElementText(cursorNode);
-		cursorNode.parentNode.removeChild(cursorNode);
-		// move range
-		range.setEndPoint(bStart ? 'StartToStart' : 'EndToStart', cursor);
-		range[bStart ? 'moveStart' : 'moveEnd']('character', tOffset);
-	},
-	
-	// conversion
 	convertFromDOMRange: function (domRange) {
 		// return an IE text range
 		var textRange = domRange._document.body.createTextRange();
-		TextRangeUtils.moveToAnchor(textRange, domRange.startContainer, domRange.startOffset, true);
-		TextRangeUtils.moveToAnchor(textRange, domRange.endContainer, domRange.endOffset, false);
+		TextRangeUtils.moveTextRangeToDOMRangeBoundary(textRange, domRange, true);
+		TextRangeUtils.moveTextRangeToDOMRangeBoundary(textRange, domRange, false);
 		return textRange;
 	},
-	convertToDOMRange: function (textRange, document) {
-		// return a DOM range
-		var domRange = new DOMRange(document);
-		var start = TextRangeUtils.findAnchor(textRange, true);
-		domRange.setStart(start.container, start.offset)
-		var end = TextRangeUtils.findAnchor(textRange, false);
-		domRange.setEnd(end.container, end.offset);
-		return domRange;
+	moveTextRangeToDOMRangeBoundary: function (textRange, domRange, bStart) {
+		// find anchor node and offset
+		var container = domRange[bStart ? 'startContainer' : 'endContainer'];
+		var offset = domRange[bStart ? 'startOffset' : 'endOffset'], textOffset = 0;
+		var anchorNode = isDataNode(container) ? container.childNodes[offset] : container;
+		// visible data nodes need a text offset
+		if (anchorNode.nodeType == 3 || anchorNode.nodeType == 4)
+			textOffset = offset;
+
+		// create a cursor element node to position range (since we can't select text nodes)
+		var cursorNode = domRange._document.createElement('a');
+		anchorNode.parentNode.insertBefore(cursorNode, anchorNode);
+		var cursor = domRange._document.body.createTextRange();
+		cursor.moveToElementText(cursorNode);
+		cursorNode.parentNode.removeChild(cursorNode);
+		// move range
+		textRange.setEndPoint(bStart ? 'StartToStart' : 'EndToStart', cursor);
+		textRange[bStart ? 'moveStart' : 'moveEnd']('character', tOffset);
 	}
 };
 

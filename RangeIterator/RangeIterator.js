@@ -5,6 +5,9 @@ var DOMUtils = {
 		while (node && node.parentNode != root)
 			node = node.parentNode;
 		return node;
+	},
+	isAncestorOrSelf: function (root, node) {
+		return isAncestorOf(root, node) || root == node;
 	}
 }
 
@@ -32,7 +35,7 @@ DOMRange.prototype.extractContents = function () {
 	// extract a range
 	return (function extractSubtree(iterator) {
 		for (var node, frag = document.createDocumentFragment(); node = iterator.next(); ) {
-			node = !iterator.hasPartialSubtree() ? iterator.remove() : node.cloneNode(false);
+			iterator.hasPartialSubtree() ? node = node.cloneNode(false) : iterator.remove();
 			if (iterator.hasPartialSubtree())
 				node.appendChild(extractSubtree(iterator.getSubtreeIterator()));
 			frag.appendChild(node);
@@ -75,43 +78,43 @@ RangeIterator.prototype = {
 	// public methods
 	next: function () {
 		// move to next node
-		this._current = this._next;
+		var current = this._current = this._next;
 		this._next = this._current && this._current.nextSibling != this._end ?
 		    this._current.nextSibling : null;
 
 		// check for partial text nodes
 		if (DOMUtils.isDataNode(this._current))
-			if (this.range.startContainer = this._current)
-				return document.createTextNode(this.range.startContainer.substringData(0, this.range.startOffset));
-			else if (this.range.endContainer = this._current)
-				return document.createTextNode(this.range.endContainer.substringData(this.range.endOffset));
-		return this._current;
+			if (this.range.endContainer == this._current)
+				(current = current.cloneNode(true)).deleteData(this.range.endOffset);
+			else if (this.range.startContainer == this._current)
+				(current = current.cloneNode(true)).deleteData(0, this.range.startOffset);
+		return current;
 	},
 	remove: function () {
 		// check for partial text nodes
 		if (DOMUtils.isDataNode(this._current))
-			if (this.range.startContainer = this._current)
-//[TODO] should return partial text nodes!
-				return this._current.deleteData(this.range.startOffset);
-			else if (this.range.endContainer = this._current)
+			if (this.range.endContainer == this._current)
 				return this._current.deleteData(0, this.range.endOffset);
-		return this._current.parentNode.removeChild(this._current);
+			else if (this.range.startContainer == this._current)
+				return this._current.deleteData(this.range.startOffset)
+		this._current.parentNode.removeChild(this._current);
 	}
 	hasPartialSubtree: function () {
 		// check if this node be partially selected
-		return isAncestorOf(this.range.startContainer, this._current) ||
-		    isAncestorOf(this.range.endConainer, this._current);
+		return !isDataNode(this._current) &&
+		    (isAncestorOrSelf(this.range.startContainer, this._current) ||
+		        isAncestorOrSelf(this.range.endContainer, this._current));
 	},
-	getRangeSubtreeIterator: function () {
+	getSubtreeIterator: function () {
 		// create a new range
 		var subRange = new DOMRange(document);
 		subRange.selectNodeContents(this._current);
-		// find anchor points
-		if (isAncestorOf(this.range.startContainer, this._current))
-			subRange.setStart(this._current, DOMUtils.findClosestAncestor(this._current, this.range.startContainer));
-		if (isAncestorOf(this.range.endContainer, this._current))
-			subRange.setEnd(this._current, DOMUtils.findClosestAncestor(this._current, this.range.endContainer));
+		// handle anchor points
+		if (isAncestorOrSelf(this.range.startContainer, this._current))
+			subRange.setStartBefore(this.range.startContainer, this.range.startOffset);
+		if (isAncestorOrSelf(this.range.endContainer, this._current))
+			subRange.setEndBefore(this.range.endContainer, this.range.endOffset);
 		// return iterator
-		return new RangeSubtreeIterator(subRange);
+		return new RangeIterator(subRange);
 	}
 });

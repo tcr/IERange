@@ -60,24 +60,43 @@ var DOMUtils = {
  */
 
 var TextRangeUtils = {
+//[TODO] these functions are redundant
+	// offsets
 	getOffset: function (range, bStart) {
 		return Math.abs(range.duplicate()[bStart ? 'moveStart' : 'moveEnd']('character', -1000000));		
 	},
 	setOffset: function (range, bStart, offset) {
 		range[bStart ? 'moveStart' : 'moveEnd']('character', offset - TextRangeUtils.getOffset(range, bStart));
 	},
+	
+	// anchor manipulation
 	findAnchor: function (range, bStart) {
-//[TODO] find a way to avoid splitting text nodes while preserving selection
-		// insert anchor at beginning of range
-		var cursor = range.duplicate();
+		// iterate through parent element to find anchor location
+		var cursorNode = document.createElement('a'), cursor = range.duplicate();
 		cursor.collapse(bStart);
-		cursor.pasteHTML('<a id="_IERANGE_OFFSET"></a>');
-		var temp = document.getElementById('_IERANGE_OFFSET');
+		var parent = cursor.parentElement(), container, offset = 0;
+		
+		// search backwards through parent
+		do {
+			// position dummy and get position
+			parent.insertBefore(cursorNode, cursorNode.previousSibling);
+			cursor.moveToElementText(cursorNode);
 
-		// get container node
-		var container = temp.parentNode, offset = DOMUtils.findChildPosition(temp);
-		// cleanup and return data
-		temp.parentNode.removeChild(temp);
+			// if we exceed or meet the cursor, we've found the node
+			if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', range) == -1 && cursorNode.nextSibling) {
+				// data node
+				container = cursorNode.nextSibling;
+				offset = TextRangeUtils.getOffset(range, bStart) - TextRangeUtils.getOffset(cursor, true);
+				break;
+			} else if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', range) < 1) {
+				// element
+				container = parent;
+				offset = DOMUtils.findChildPosition(cursorNode);
+				break;
+			}
+		} while (cursorNode.previousSibling);
+		// remove cursor and return anchor
+		cursorNode.parentNode.removeChild(cursorNode);
 		return {container: container, offset: offset};
 	},
 	moveToAnchor: function (range, container, offset, bStart) {
@@ -97,15 +116,33 @@ var TextRangeUtils = {
 			anchorNode = container.childNodes[offset];
 		}
 
-		// create a dummy node to position range (since we can't select text nodes)
-		var temp = document.createElement('a');
-		anchorContainer.insertBefore(temp, anchorNode);
-		var tempRange = document.body.createTextRange();
-		tempRange.moveToElementText(temp);
-		temp.parentNode.removeChild(temp);
-		// get text offset and remove dummy
-		tOffset += TextRangeUtils.getOffset(tempRange, bStart);
-		TextRangeUtils.setOffset(range, bStart, tOffset);
+		// create a cursor node to position range (since we can't select text nodes)
+		var cursorNode = document.createElement('a');
+		anchorContainer.insertBefore(cursorNode, anchorNode);
+		var cursor = document.body.createTextRange();
+		cursor.moveToElementText(cursorNode);
+		cursorNode.parentNode.removeChild(cursorNode);
+		// move range
+		range.setEndPoint(bStart ? 'StartToStart' : 'EndToStart', cursor);
+		range[bStart ? 'moveStart' : 'moveEnd']('character', tOffset);
+	},
+	
+	// conversion
+	convertFromDOMRange: function (domRange) {
+		// return an IE text range
+		var textRange = domRange._document.body.createTextRange();
+		TextRangeUtils.moveToAnchor(textRange, domRange.startContainer, domRange.startOffset, true);
+		TextRangeUtils.moveToAnchor(textRange, domRange.endContainer, domRange.endOffset, false);
+		return textRange;
+	},
+	convertToDOMRange: function (textRange, document) {
+		// return a DOM range
+		var domRange = new DOMRange(document);
+		var start = TextRangeUtils.findAnchor(textRange, true);
+		domRange.setStart(start.container, start.offset)
+		var end = TextRangeUtils.findAnchor(textRange, false);
+		domRange.setEnd(end.container, end.offset);
+		return domRange;
 	}
 };
 
@@ -113,16 +150,14 @@ var TextRangeUtils = {
   DOM Range
  */
  
-function DOMRange(document, range) {
+function DOMRange(document) {
 	// save document parameter
 	this._document = document;
 	
 	// initialize range
-//[TODO] should encompass body?
+//[TODO] this should be located at document[0], document[0]
 	this.startContainer = this.endContainer = document.body;
 	this.endOffset = DOMUtils.getNodeLength(document.body);
-	if (range)
-		this.loadTextRange(range);
 }
 DOMRange.START_TO_START = 0;
 DOMRange.START_TO_END = 1;
@@ -152,6 +187,7 @@ DOMRange.prototype = {
 	},
 	
 	// range methods
+//[TODO] collapse if start is after end, end is before start
 	setStart: function(container, offset) {
 		this.startContainer = container;
 		this.startOffset = offset;
@@ -249,21 +285,17 @@ DOMRange.prototype = {
 		        : 1;
 	},
 	cloneRange: function () {
-		// return cloned range (directly copying properties for speed)
+		// return cloned range
 		var range = new DOMRange(this._document);
-		range.startContainer = this.startContainer;
-		range.startOffset = this.startOffset;
-		range.endContainer = this.endContainer;
-		range.endOffset = this.endOffset;
-		range.commonAncestorContainer = this.commonAncestorContainer;
-		range.collapsed = this.collapsed;
+		range.setStart(this.startContainer, this.startOffset);
+		range.setEnd(this.endContainer, this.endOffset);
 		return range;
 	},
 	detach: function () {
 //[TODO] Releases Range from use to improve performance. 
 	},
 	toString: function () {
-		return this.getTextRange().text;
+		return TextRangeUtils.convertFromDOMRange(this).text;
 	},
 	createContextualFragment: function (tagString) {
 		// parse the tag string in a context node
@@ -273,25 +305,6 @@ DOMRange.prototype = {
 		for (var fragment = this._document.createDocumentFragment(); content.firstChild; )
 			fragment.appendChild(content.firstChild);
 		return fragment;
-	},
-
-	// text range manipulation
-	getTextRange: function () {
-		// return an IE text range
-		var textRange = this._document.body.createTextRange();
-		TextRangeUtils.moveToAnchor(textRange, this.startContainer, this.startOffset, true);
-		TextRangeUtils.moveToAnchor(textRange, this.endContainer, this.endOffset, false);
-		return textRange;
-	},
-//[TODO] move this to TextRangeUtils?
-	loadTextRange: function (textRange) {
-		var start = TextRangeUtils.findAnchor(textRange, true);
-		this.startContainer = start.container;
-		this.startOffset = start.offset;
-		var end = TextRangeUtils.findAnchor(textRange, false);
-		this.endContainer = end.container;
-		this.endOffset = end.offset;
-		this._refreshProperties();
 	}
 }
 
@@ -395,79 +408,64 @@ DOMRange.prototype.extractContents = function () {
 // possible with just removeAllRanges/addRange/getRangeAt.
 
 function DOMSelection(document) {
-	// save document parameter;
+	// save document parameter
 	this._document = document
 	
 	// add DOM selection handler
 	var selection = this;
-	document.attachEvent('onselectionchange', function (e) { selection._selectionChangeHandler(e); });
+	document.attachEvent('onselectionchange', function () { selection._selectionChangeHandler(); });
 }
 
 DOMSelection.prototype = {
 	// public properties
 	rangeCount: 0,
 	// private properties
-	_ranges: [],
-	_canChangeSelection: true,
 	_document: null,
 	
 	// private methods
-	_selectionChangeHandler: function (e) {
-		// check if we can update selection
-		if (!this._canChangeSelection)
-			return;
-		
-		// clear ranges list
-		this._ranges = [];
-		// add any existing selection, or a cursor position in content editable mode
-		var textRange = this._document.selection.createRange();
-		if (textRange.compareEndPoints('StartToEnd', textRange) != 0 ||
-		    textRange.parentElement().isContentEditable)
-			this._ranges.push(new DOMRange(this._document, this._document.selection.createRange()));
-		this.rangeCount = this._ranges.length;
+	_selectionChangeHandler: function () {
+		// check if there exists a range
+		this.rangeCount = this._selectionExists(this._document.selection.createRange()) ? 1 : 0;
 	},
-	_refreshSelectionFromRanges: function () {
-		// check if we can update selection
-		this._canChangeSelection = false;
-		
-		// update range count
-		this.rangeCount = this._ranges.length;
-		// select ranges
-		for (var i = 0; i < this._ranges.length; i++)
-			this._ranges[i].getTextRange().select();
-		
-		// enable selection
-		this._canChangeSelection = true;
+	_selectionExists: function (textRange) {
+		// checks if a created text range exists or is an editable cursor
+		return textRange.compareEndPoints('StartToEnd', textRange) != 0 ||
+		    textRange.parentElement().isContentEditable;
 	},
 	
 	// public methods
 	addRange: function (range) {
 		// add range or combine with existing range
-		if (!this._ranges.length)
-			this._ranges.push(range.cloneRange());
-		else {
-			// only modify range if it intersects with current range
-			var selection = this._ranges[0];
-			if (range.compareBoundaryPoints(DOMRange.START_TO_START, selection) == -1)
-				if (range.compareBoundaryPoints(DOMRange.START_TO_END, selection) > -1 &&
-				    range.compareBoundaryPoints(DOMRange.END_TO_END, selection) == -1)
-					selection.setStart(range.startContainer, range.startOffset);
-			else
-				if (range.compareBoundaryPoints(DOMRange.END_TO_START, selection) < 1 &&
-				    range.compareBoundaryPoints(DOMRange.END_TO_END, selection) > -1)
-					selection.setEnd(range.endContainer, range.endOffset);
+		var selection = this._document.selection.createRange(), textRange = TextRangeUtils.convertFromDOMRange(range);
+		if (!this._selectionExists(selection))
+		{
+			// select range
+			textRange.select();
 		}
-		this._refreshSelectionFromRanges();
+		else
+		{
+			// only modify range if it intersects with current range
+			if (textRange.compareEndPoints('StartToStart', selection) == -1)
+				if (textRange.compareEndPoints('StartToEnd', selection) > -1 &&
+				    textRange.compareEndPoints('EndToEnd', selection) == -1)
+					selection.setEndPoint('StartToStart', textRange);
+			else
+				if (textRange.compareEndPoints('EndToStart', selection) < 1 &&
+				    textRange.compareEndPoints('EndToEnd', selection) > -1)
+					selection.setEndPoint('EndToEnd', textRange);
+			selection.select();
+		}
 	},
 	removeAllRanges: function () {
 		// remove all ranges
 		this._document.selection.empty();
-		this._ranges = [];
-		this._refreshSelectionFromRanges();
 	},
 	getRangeAt: function (index) {
-		// get specified range
-		return this._ranges[index] && this._ranges[index].cloneRange();
+		// return any existing selection, or a cursor position in content editable mode
+		var textRange = this._document.selection.createRange();
+		if (this._selectionExists(textRange))
+			return TextRangeUtils.convertToDOMRange(textRange, this._document);
+		return null;
 	},
 	toString: function () {
 		// get selection text

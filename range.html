@@ -9,6 +9,22 @@
     <![endif]-->
 
     <script>
+firebug.env.height = 300;
+
+function logRange() {
+	var range = window.getSelection().getRangeAt(0);
+	console.log('-----------------------------------------------');
+	console.log('Range:', range)
+	console.log('Start:', range.startContainer, range.startOffset);
+	console.log('End:', range.endContainer, range.endOffset);
+	console.log('Common Ancestor:', range.commonAncestorContainer);
+}
+function logSelection() {
+	var selection = window.getSelection();
+	console.log('-----------------------------------------------');
+	console.log('Selection:', selection)
+	console.log('Range count:', selection.rangeCount);
+}
 function logXML(b) {
 	var a = document.createElement('DocumentFragment');
 	a.appendChild(b);
@@ -39,8 +55,8 @@ html, body { margin: 0; padding: 0; }
   </head>
   <body>
     <div id="controls">
-     <input type="button" value="Log Selection" onclick="console.log(window.getSelection())">
-     <input type="button" value="Log Range" onclick="console.log(window.getSelection().getRangeAt(0))">
+     <input type="button" value="Log Selection" onclick="logSelection()">
+     <input type="button" value="Log Range" onclick="logRange()">
      <button onclick="makeSelection()">Make a Selection</button><br>
      <input type="button" value="Clone Range" onclick="logXML(window.getSelection().getRangeAt(0).cloneContents())">
      <input type="button" value="Extract Range" onclick="logXML(window.getSelection().getRangeAt(0).extractContents())">

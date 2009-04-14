@@ -51,7 +51,7 @@ var DOMUtils = {
 		return node;
 	},
 	getNodeLength: function (node) {
-		return DOMUtils.isDataNode(node) ? node.nodeValue.length : node.childNodes.length;
+		return DOMUtils.isDataNode(node) ? node.length : node.childNodes.length;
 	},
 	splitDataNode: function (node, offset) {
 		if (!isDataNode(node))
@@ -81,7 +81,7 @@ var TextRangeUtils = {
 			} while (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) > 0 && cursorNode.previousSibling);
 
 			// when we exceed or meet the cursor, we've found the node
-			if (DOMUtils.isDataNode(cursorNode.nextSibling)cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) == -1 && cursorNode.nextSibling) {
+			if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) == -1 && cursorNode.nextSibling) {
 				// data node
 				cursor.setEndPoint(bStart ? 'EndToStart' : 'EndToEnd', textRange);
 				domRange[bStart ? 'setStart' : 'setEnd'](cursorNode.nextSibling, cursor.text.length);

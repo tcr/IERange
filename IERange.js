@@ -13,9 +13,8 @@
   Selection reference:
     http://trac.webkit.org/browser/trunk/WebCore/page/DOMSelection.cpp
   TextRange reference:
-    http://msdn.microsoft.com/en-us/library/ms535872.aspx#  
+    http://msdn.microsoft.com/en-us/library/ms535872.aspx
   Other links:
-    http://stackoverflow.com/questions/164147/character-offset-in-an-internet-explorer-textrange
     http://jorgenhorstink.nl/test/javascript/range/range.js
     http://jorgenhorstink.nl/2006/07/05/dom-range-implementation-in-ecmascript-completed/
     http://dylanschiemann.com/articles/dom2Range/dom2RangeExamples.html
@@ -46,10 +45,9 @@ var DOMUtils = {
 		return DOMUtils.isAncestorOf(root, node) || root == node;
 	},
 	findClosestAncestor: function (root, node) {
-		if (node == null || !DOMUtils.isAncestorOf(root, node))
-			return node;
-		while (node && node.parentNode != root)
-			node = node.parentNode;
+		if (DOMUtils.isAncestorOf(root, node))
+			while (node && node.parentNode != root)
+				node = node.parentNode;
 		return node;
 	},
 	getNodeLength: function (node) {
@@ -77,22 +75,20 @@ var TextRangeUtils = {
 			cursor.collapse(bStart);
 			var parent = cursor.parentElement();
 			do {
-				// position dummy and get position
 				parent.insertBefore(cursorNode, cursorNode.previousSibling);
 				cursor.moveToElementText(cursorNode);
+//[TODO] remove previousSibling check?
+			} while (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) > 0 && cursorNode.previousSibling);
 
-				// if we exceed or meet the cursor, we've found the node
-				if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) == -1 && cursorNode.nextSibling) {
-					// data node
-					cursor.setEndPoint(bStart ? 'EndToStart' : 'EndToEnd', textRange);
-					domRange[bStart ? 'setStart' : 'setEnd'](cursorNode.nextSibling, cursor.text.length);
-					break;
-				} else if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) < 1) {
-					// element
-					domRange[bStart ? 'setStartBefore' : 'setEndBefore'](cursorNode);
-					break;
-				}
-			} while (cursorNode.previousSibling);
+			// when we exceed or meet the cursor, we've found the node
+			if (DOMUtils.isDataNode(cursorNode.nextSibling)cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) == -1 && cursorNode.nextSibling) {
+				// data node
+				cursor.setEndPoint(bStart ? 'EndToStart' : 'EndToEnd', textRange);
+				domRange[bStart ? 'setStart' : 'setEnd'](cursorNode.nextSibling, cursor.text.length);
+			} else {
+				// element
+				domRange[bStart ? 'setStartBefore' : 'setEndBefore'](cursorNode);
+			}
 			cursorNode.parentNode.removeChild(cursorNode);
 		}
 	
@@ -336,18 +332,20 @@ DOMRange.prototype = {
   Range iterator
  */
 
-//[TODO] finding the actual range of nodes to traverse needs to be fixed. This
-// needs to work both for partially selected data nodes (Where start and end are
-// equal) and for long-winded ranges where the start or end cursor is also the 
-// common ancestor; probably eliminate findClosestAncestor
 function RangeIterator(range) {
 	this.range = range;
 	if (range.collapsed)
 		return;
-	var start = DOMUtils.isDataNode(range.startContainer) ? range.startContainer : range.startContainer.childNodes[range.startOffset];
-	this._next = DOMUtils.findClosestAncestor(range.commonAncestorContainer, start);
-	var end = DOMUtils.isDataNode(range.endContainer) ? range.endContainer : range.endContainer.childNodes[range.endOffset];
-	this._end = DOMUtils.findClosestAncestor(range.commonAncestorContainer, end);
+
+//[TODO] ensure this works
+	// get anchors
+	var root = range.commonAncestorContainer;
+	this._next = range.startContainer == root && !DOMUtils.isDataNode(range.startContainer) ?
+	    range.startContainer.childNodes[range.startOffset] :
+	    DOMUtils.findClosestAncestor(root, range.startContainer);
+	this._end = range.endContainer == root && !DOMUtils.isDataNode(range.endContainer) ?
+	    range.endContainer.childNodes[range.endOffset] :
+	    DOMUtils.findClosestAncestor(root, range.endContainer).nextSibling;
 }
 
 RangeIterator.prototype = {

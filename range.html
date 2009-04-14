@@ -1,15 +1,20 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!DOCTYPE html>
 <html>
   <head>
-    <title>W3c Range</title>
+    <title>RangeIterator</title>
 
-    <script type='text/javascript' 
-        src='http://getfirebug.com/releases/lite/1.2/firebug-lite-compressed.js'></script>
-    <!--[if IE]><script type="text/javascript" src="IERange.js"></script><![endif]-->
+    <!--[if IE]>
+    <script type='text/javascript' src='http://getfirebug.com/releases/lite/1.2/firebug-lite-compressed.js'></script>
+    <script type="text/javascript" src="IERange.js"></script>
+    <![endif]-->
 
     <script>
-  
-window.onload = function (e) {
+function logXML(b) {
+	var a = document.createElement('DocumentFragment');
+	a.appendChild(b);
+	console.log(a.innerHTML);
+}
+function makeSelection() {
 	// make a selection
 	var range = document.createRange();
 	range.setStart(document.getElementById('paragraph').firstChild.firstChild, 2);
@@ -17,23 +22,35 @@ window.onload = function (e) {
 	var sel = window.getSelection();
 	sel.removeAllRanges();
 	sel.addRange(range);
-	console.log(range);
 }
-
-function hilight() {
+window.onload = makeSelection;
+function highlight() {
 	var span = document.createElement('span');
 	span.style.background = 'red';
 	window.getSelection().getRangeAt(0).surroundContents(span);
 }
-	
-    </script>
 
+    </script>
+<style>
+html, body { margin: 0; padding: 0; }
+#controls { margin: 0 0 1em; padding: 0.25em 0.5em; background: #aaa; border-bottom: 2px solid #777; }
+#body { margin: 1em 0.5em; }
+</style>
   </head>
   <body>
+    <div id="controls">
+     <input type="button" value="Log Selection" onclick="console.log(window.getSelection())">
+     <input type="button" value="Log Range" onclick="console.log(window.getSelection().getRangeAt(0))">
+     <button onclick="makeSelection()">Make a Selection</button><br>
+     <input type="button" value="Clone Range" onclick="logXML(window.getSelection().getRangeAt(0).cloneContents())">
+     <input type="button" value="Extract Range" onclick="logXML(window.getSelection().getRangeAt(0).extractContents())">
+     <input type="button" value="Delete Range" onclick="window.getSelection().getRangeAt(0).deleteContents()">
+     <input type="button" value="Surround Contents" onclick="highlight()">
+    </div>
+<div id="body">
+<h1>The Reeling</h1>
     <p id="paragraph"><strong>foo<!-- -->bar</strong>Heading 1<em>foo<!-- -->bar</em></p>
     <p>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;easdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>dfasdfA</p>
-    <input type="button" value="Log Current Selection" onclick="console.log(window.getSelection())">
-    <input type="button" value="Log Current Range" onclick="console.log(window.getSelection().getRangeAt(0))">
-    <input type="button" value="Hilight" onclick="hilight()">
+</div>
   </body>
 </html>

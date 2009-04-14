@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>RangeIterator</title>
+
+    <script type="text/javascript" src="IERange.js"></script>
+    <!--[if IE]><script type='text/javascript' 
+        src='http://getfirebug.com/releases/lite/1.2/firebug-lite-compressed.js'></script><![endif]-->
+
+    <script>
+	
+    </script>
+<style>
+html, body { margin: 0; padding: 0; }
+#controls { margin: 0 0 1em; padding: 0.25em 0.5em; background: #aaa; border-bottom: 2px solid #777; }
+#body { margin: 1em 0.5em; }
+</style>
+  </head>
+  <body>
+    <div id="controls">
+     <input type="button" value="Log Current Selection" onclick="console.log(window.getSelection())">
+     <input type="button" value="Log Current Range" onclick="console.log(window.getSelection().getRangeAt(0))">
+     <input type="button" value="Hilight" onclick="hilight()">
+    </div>
+<div id="body">
+    <p id="paragraph"><strong>foo<!-- -->bar</strong>Heading 1<em>foo<!-- -->bar</em></p>
+    <p>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;easdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>dfasdfA</p>
+</div>
+  </body>
+</html>

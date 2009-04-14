@@ -84,8 +84,8 @@ var TextRangeUtils = {
 				// if we exceed or meet the cursor, we've found the node
 				if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) == -1 && cursorNode.nextSibling) {
 					// data node
-					cursor.setEndPoint('EndToEnd', textRange);
-					domRange[bStart ? 'setStart', 'setEnd'](cursorNode.nextSibling, cursor.text.length);
+					cursor.setEndPoint(bStart ? 'EndToStart' : 'EndToEnd', textRange);
+					domRange[bStart ? 'setStart' : 'setEnd'](cursorNode.nextSibling, cursor.text.length);
 					break;
 				} else if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) < 1) {
 					// element
@@ -206,7 +206,7 @@ DOMRange.prototype = {
 	},
 	selectNodeContents: function (refNode) {
 		this.setStart(refNode, 0);
-		this.setEnd(refNode, DOMUtils.getNodeLength(redNode));
+		this.setEnd(refNode, DOMUtils.getNodeLength(refNode));
 	},
 	collapse: function (toStart) {
 		if (toStart)
@@ -336,14 +336,18 @@ DOMRange.prototype = {
   Range iterator
  */
 
+//[TODO] finding the actual range of nodes to traverse needs to be fixed. This
+// needs to work both for partially selected data nodes (Where start and end are
+// equal) and for long-winded ranges where the start or end cursor is also the 
+// common ancestor; probably eliminate findClosestAncestor
 function RangeIterator(range) {
 	this.range = range;
 	if (range.collapsed)
 		return;
-	this._next = DOMUtils.findClosestAncestor(range.commonAncestorContainer,
-	    DOMUtils.isDataNode(range.startContainer) ? range.startContainer : range.startContainer.childNodes[range.startOffset]);
-	this._end = DOMUtils.findClosestAncestor(range.commonAncestorContainer,
-	    DOMUtils.isDataNode(range.endContainer) ? range.endContainer : range.endContainer.childNodes[range.endOffset]);
+	var start = DOMUtils.isDataNode(range.startContainer) ? range.startContainer : range.startContainer.childNodes[range.startOffset];
+	this._next = DOMUtils.findClosestAncestor(range.commonAncestorContainer, start);
+	var end = DOMUtils.isDataNode(range.endContainer) ? range.endContainer : range.endContainer.childNodes[range.endOffset];
+	this._end = DOMUtils.findClosestAncestor(range.commonAncestorContainer, end);
 }
 
 RangeIterator.prototype = {
@@ -361,7 +365,7 @@ RangeIterator.prototype = {
 	next: function () {
 		// move to next node
 		var current = this._current = this._next;
-		this._next = this._current && this._current != this._end ?
+		this._next = this._current && this._current.nextSibling != this._end ?
 		    this._current.nextSibling : null;
 
 		// check for partial text nodes

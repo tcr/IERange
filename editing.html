@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>RangeIterator</title>
+
+    <!--[if IE]>
+    <script type='text/javascript' src='http://getfirebug.com/releases/lite/1.2/firebug-lite-compressed.js'></script>
+    <script type="text/javascript" src="IERange.js"></script>
+    <![endif]-->
+
+    <script>
+function logXML(b) {
+	var a = document.createElement('DocumentFragment');
+	a.appendChild(b);
+	console.log(a.innerHTML);
+}
+    </script>
+<style>
+html, body { margin: 0; padding: 0; }
+#controls { margin: 0 0 1em; padding: 0.25em 0.5em; background: #aaa; border-bottom: 2px solid #777; }
+#body { margin: 1em 0.5em; }
+</style>
+  </head>
+  <body>
+    <div id="controls">
+     <input type="button" value="CloneRange" onclick="logXML(window.getSelection().getRangeAt(0).cloneContents())">
+     <input type="button" value="Extract Range" onclick="logXML(window.getSelection().getRangeAt(0).extractContents())">
+     <input type="button" value="Delete Range" onclick="window.getSelection().getRangeAt(0).deleteContents()">
+     <input type="button" value="Range" onclick="console.log(window.getSelection().getRangeAt(0))">
+    </div>
+<div id="body">
+<h1>The Reeling</h1>
+    <p id="paragraph"><strong>foo<!-- -->bar</strong>Heading 1<em>foo<!-- -->bar</em></p>
+    <p>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;easdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>asdfasa;esgj dsf;lgjadfk;ldfg df<b>sgas</b>dfasdfA</p>
+</div>
+  </body>
+</html>

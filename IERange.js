@@ -30,7 +30,8 @@
 
 var DOMUtils = {
 	findChildPosition: function (node) {
-		for (var i = 0; node = node.previousSibling; i++);
+		for (var i = 0; node = node.previousSibling; i++)
+			continue;
 		return i;
 	},
 	isDataNode: function (node) {
@@ -56,7 +57,7 @@ var DOMUtils = {
 	splitDataNode: function (node, offset) {
 		if (!DOMUtils.isDataNode(node))
 			return false;
-		var newNode = node.cloneNode(false)
+		var newNode = node.cloneNode(false);
 		node.deleteData(offset, node.length);
 		newNode.deleteData(0, offset);
 		node.parentNode.insertBefore(newNode, node.nextSibling);
@@ -331,7 +332,7 @@ DOMRange.prototype = {
 			fragment.appendChild(content.firstChild);
 		return fragment;
 	}
-}
+};
 
 /*
   Range iterator
@@ -420,7 +421,7 @@ RangeIterator.prototype = {
 
 function DOMSelection(document) {
 	// save document parameter
-	this._document = document
+	this._document = document;
 	
 	// add DOM selection handler
 	var selection = this;
@@ -482,7 +483,7 @@ DOMSelection.prototype = {
 		// get selection text
 		return this._document.selection.createRange().text;
 	}
-}
+};
 
 /*
   scripting hooks
@@ -490,12 +491,12 @@ DOMSelection.prototype = {
 
 document.createRange = function () {
 	return new DOMRange(document);
-}
+};
 
 var selection = new DOMSelection(document);
 window.getSelection = function () {
 	return selection;
-}
+};
 
 //[TODO] expose DOMRange/DOMSelection to window.?
 

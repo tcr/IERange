@@ -54,11 +54,12 @@ var DOMUtils = {
 		return DOMUtils.isDataNode(node) ? node.length : node.childNodes.length;
 	},
 	splitDataNode: function (node, offset) {
-		if (!isDataNode(node))
+		if (!DOMUtils.isDataNode(node))
 			return false;
-		var newNode = node.parentNode.insertBefore(node.cloneNode(true), node.nextSibling);
-		node.deleteData(0, offset);
-		newNode.deleteData(offset, newNode.length);
+		var newNode = node.cloneNode(false)
+		node.deleteData(offset, node.length);
+		newNode.deleteData(0, offset);
+		node.parentNode.insertBefore(newNode, node.nextSibling);
 	}
 };
 
@@ -77,7 +78,6 @@ var TextRangeUtils = {
 			do {
 				parent.insertBefore(cursorNode, cursorNode.previousSibling);
 				cursor.moveToElementText(cursorNode);
-//[TODO] remove previousSibling check?
 			} while (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRange) > 0 && cursorNode.previousSibling);
 
 			// when we exceed or meet the cursor, we've found the node
@@ -104,20 +104,21 @@ var TextRangeUtils = {
 			// find anchor node and offset
 			var container = domRange[bStart ? 'startContainer' : 'endContainer'];
 			var offset = domRange[bStart ? 'startOffset' : 'endOffset'], textOffset = 0;
-			var anchorNode = isDataNode(container) ? container.childNodes[offset] : container;
+			var anchorNode = DOMUtils.isDataNode(container) ? container : container.childNodes[offset];
+			var anchorParent = DOMUtils.isDataNode(container) ? container.parentNode : container;
 			// visible data nodes need a text offset
-			if (anchorNode.nodeType == 3 || anchorNode.nodeType == 4)
+			if (container.nodeType == 3 || container.nodeType == 4)
 				textOffset = offset;
 
 			// create a cursor element node to position range (since we can't select text nodes)
 			var cursorNode = domRange._document.createElement('a');
-			anchorNode.parentNode.insertBefore(cursorNode, anchorNode);
+			anchorParent.insertBefore(cursorNode, anchorNode);
 			var cursor = domRange._document.body.createTextRange();
 			cursor.moveToElementText(cursorNode);
 			cursorNode.parentNode.removeChild(cursorNode);
 			// move range
 			textRange.setEndPoint(bStart ? 'StartToStart' : 'EndToStart', cursor);
-			textRange[bStart ? 'moveStart' : 'moveEnd']('character', tOffset);
+			textRange[bStart ? 'moveStart' : 'moveEnd']('character', textOffset);
 		}
 		
 		// return an IE text range
@@ -225,8 +226,13 @@ DOMRange.prototype = {
 		})(new RangeIterator(this));
 	},
 	extractContents: function () {
+		// cache range and move anchor points
+		var range = this.cloneRange();
+		if (this.startContainer != this.commonAncestorContainer)
+			this.setStartAfter(DOMUtils.findClosestAncestor(this.commonAncestorContainer, this.startContainer));
+		this.collapse(true);
 		// extract range
-		var extract = (function extractSubtree(iterator) {
+		return (function extractSubtree(iterator) {
 			for (var node, frag = document.createDocumentFragment(); node = iterator.next(); ) {
 				iterator.hasPartialSubtree() ? node = node.cloneNode(false) : iterator.remove();
 				if (iterator.hasPartialSubtree())
@@ -234,21 +240,19 @@ DOMRange.prototype = {
 				frag.appendChild(node);
 			}
 			return frag;
-		})(new RangeIterator(this));
-		// move range and return value
-		this.setStartBefore(DOMUtils.findClosestAncestor(this.commonAncestorContainer, this.endContainer));
-		this.collapse(true);
-		return extract;
+		})(new RangeIterator(range));
 	},
 	deleteContents: function () {
+		// cache range and move anchor points
+		var range = this.cloneRange();
+		if (this.startContainer != this.commonAncestorContainer)
+			this.setStartAfter(DOMUtils.findClosestAncestor(this.commonAncestorContainer, this.startContainer));
+		this.collapse(true);
 		// delete range
 		(function deleteSubtree(iterator) {
 			while (iterator.next())
 				iterator.hasPartialSubtree() ? deleteSubtree(iterator.getSubtreeIterator()) : iterator.remove();
-		})(new RangeIterator(this));
-		// move range
-		this.setStartBefore(DOMUtils.findClosestAncestor(this.commonAncestorContainer, this.endContainer));
-		this.collapse(true);
+		})(new RangeIterator(range));
 	},
 	insertNode: function (newNode) {
 		// set original anchor and insert node
@@ -265,6 +269,7 @@ DOMRange.prototype = {
 		// extract and surround contents
 		var content = this.extractContents();
 		this.insertNode(newNode);
+	console.log(this);
 		newNode.appendChild(content);
 		this.selectNode(newNode);
 	},

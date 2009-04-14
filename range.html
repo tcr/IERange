@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>RangeIterator</title>
+    <title>IERange</title>
 
     <!--[if IE]>
     <script type='text/javascript' src='http://getfirebug.com/releases/lite/1.2/firebug-lite-compressed.js'></script>
@@ -44,6 +44,7 @@ function highlight() {
 	var span = document.createElement('span');
 	span.style.background = 'red';
 	window.getSelection().getRangeAt(0).surroundContents(span);
+	window.getSelection().removeAllRanges();
 }
 
     </script>

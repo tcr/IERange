@@ -1,0 +1,26 @@
+<!Doctype HTML>
+<html>
+    <head>
+        <meta charset=utf-8>
+        <title>IERange Sandbox with iframe</title>
+        <!--[if IE]>
+        <script type="text/javascript" src="https://getfirebug.com/firebug-lite-beta.js"></script>
+        <![endif]-->
+        <link rel="stylesheet" type="text/css" href="css/style.css">
+        <script type="text/javascript" src="js/ierange.js"></script>
+        <script type="text/javascript" src="js/common.js"></script>
+    </head>
+    <body>
+        <h1>IERange Sandbox with iframe</h1>
+        <p>Test out <cite>IERange</cite> here!</p>
+        <div id="toolbar">
+            <ul>
+                <li><a href="javascript:void(0);" onclick="info();">Info</a></li>
+                <li><a href="javascript:void(0);" onclick="makeSelection();">Make selection</a></li>
+                <li><a href="javascript:void(0);" onclick="boldSelection();">Bold selection</a></li>
+                <li><a href="javascript:void(0);" onclick="highlightSelection();">Highlight selection</a></li>
+            </ul>
+        </div>
+        <iframe id="content" src="iframe.html" frameborder='0'>
+    </body>
+</html>

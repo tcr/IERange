@@ -439,17 +439,18 @@ DOMSelection.prototype = {
 		// check if there exists a range
 		this.rangeCount = this._selectionExists(this._document.selection.createRange()) ? 1 : 0;
 	},
-	_selectionExists: function (textRange) {
+	_selectionExists: function (textRange, cursor) {
+	    if (cursor === undefined) { cursor = true; }
 		// checks if a created text range exists or is an editable cursor
 		return textRange.compareEndPoints('StartToEnd', textRange) != 0 ||
-		    textRange.parentElement().isContentEditable;
+		    (textRange.parentElement().isContentEditable && cursor);
 	},
 	
 	// public methods
 	addRange: function (range) {
 		// add range or combine with existing range
 		var selection = this._document.selection.createRange(), textRange = TextRangeUtils.convertFromDOMRange(range);
-		if (!this._selectionExists(selection))
+		if (!this._selectionExists(selection, false))
 		{
 			// select range
 			textRange.select();
@@ -488,16 +489,16 @@ DOMSelection.prototype = {
 /*
   scripting hooks
  */
-
-document.createRange = function () {
-	return new DOMRange(document);
-};
-
-var selection = new DOMSelection(document);
-window.getSelection = function () {
-	return selection;
-};
-
-//[TODO] expose DOMRange/DOMSelection to window.?
-
+if (window.getSelection === undefined) {
+    document.createRange = function () {
+        return new DOMRange(document);
+    };
+    var selection = new DOMSelection(document);
+    window.getSelection = function () {
+        return selection;
+    };
+    // exports DOMRange and DOMSelection
+    window.DOMRange = DOMRange;
+    window.DOMSelection = DOMSelection;
+}
 })();

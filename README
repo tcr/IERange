@@ -1,0 +1,7 @@
+</IERange>
+
+This project is no longer actively maintained. For a complete browser polyfill that supports DOM Ranges in Internet Explorer, check out [http://code.google.com/p/rangy/](Rangy) by @timdown. 
+
+For a tiny (4kb) cross-browser solution for dealing with selections in all modern browsers, see my new and actively maintained project [https://github.com/timcameronryan/selection.js](selection.js).
+
+This code is released under the MIT License.
